@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="description" content="PharmaSync CARE — Intelligent Medicine Redistribution Network for Healthcare Facilities" />
+  <title>PharmaSync CARE — Medicine Redistribution Network</title>
+
+  <!-- Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Vendor CSS (Local with CDN fallback) -->
+  <link rel="stylesheet" href="assets/vendor/leaflet.css" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';" />
+
+  <!-- Design System & Stylesheets with cache buster -->
+  <link rel="stylesheet" href="css/variables.css?v=3.0" />
+  <link rel="stylesheet" href="css/base.css?v=3.0" />
+  <link rel="stylesheet" href="css/layout.css?v=3.0" />
+  <link rel="stylesheet" href="css/components.css?v=3.0" />
+  <link rel="stylesheet" href="css/pages.css?v=3.0" />
+</head>
+<body>
+  <div id="app-container">
+    <!-- Mandatory Academic Disclaimer Banner -->
+    <header class="academic-disclaimer-banner">
+      <div class="message">
+        <span class="badge">STUDENT PROTOTYPE</span>
+        <span>PharmaSync CARE &bull; 2nd Year B.Tech CSE DBMS Project &bull; Synthetic Demonstration Data</span>
+      </div>
+      <div class="meta">
+        <span>Non-Clinical Decision Support &bull; Does Not Authorize Physical Drug Dispensation</span>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <!-- Mobile Drawer Backdrop -->
+      <div class="sidebar-overlay"></div>
+
+      <!-- Left Navigation Sidebar -->
+      <aside id="sidebar"></aside>
+
+      <!-- Main Content Viewport -->
+      <div id="main-viewport">
+        <!-- Persistent Top Navigation Bar -->
+        <header id="topbar"></header>
+
+        <!-- Dynamic Page View Container -->
+        <main id="app-content"></main>
+      </div>
+    </div>
+  </div>
+
+  <!-- Accessible Modal Container -->
+  <div id="modal-container"></div>
+
+  <!-- Toast Notifications Container -->
+  <div id="toast-container"></div>
+
+  <!-- Vendor Libraries (Local with CDN fallbacks) -->
+  <script src="assets/vendor/chart.umd.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';"></script>
+  <script src="assets/vendor/leaflet.js" onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';"></script>
+  <script src="assets/vendor/anime.umd.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/animejs@4.5.0/lib/anime.umd.min.js';"></script>
+
+  <!-- ES Modules Application Bootstrap with cache buster -->
+  <script type="module" src="js/main.js?v=3.0"></script>
+</body>
+</html>

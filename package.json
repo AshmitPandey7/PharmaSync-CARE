@@ -1,0 +1,9 @@
+{
+  "name": "pharmasync-care",
+  "version": "1.0.0",
+  "description": "PharmaSync CARE — Intelligent Medicine Redistribution Network",
+  "type": "module",
+  "dependencies": {
+    "animejs": "^4.5.0"
+  }
+}
