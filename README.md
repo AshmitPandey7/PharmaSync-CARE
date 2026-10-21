@@ -33,7 +33,6 @@ Because the application uses modern JavaScript ES modules, it should be served o
 
 ### Step 1: Open a Terminal in the Project Directory
 ```powershell
-cd "c:\Users\Ashmit\Documents\Coding\DBS Project"
 ```
 
 ### Step 2: Start a Lightweight Local Web Server
