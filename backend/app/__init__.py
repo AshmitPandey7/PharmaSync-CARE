@@ -1,9 +1,10 @@
 """
 PharmaSync CARE — Flask Application Factory
-Initializes CORS, database connection pool, blueprints, and centralized error handlers.
+Initializes CORS, database connection pool, blueprints, frontend static serving, and centralized error handlers.
 """
 
-from flask import Flask
+from pathlib import Path
+from flask import Flask, send_from_directory, request
 from flask_cors import CORS
 from app.config import Config
 from app.database import init_db
@@ -72,14 +73,32 @@ def create_app(config_class=Config):
         from app.routes.health import check_health
         return check_health()
 
+    # Serve Static Frontend Files from Flask root
+    frontend_dir = Path(__file__).resolve().parent.parent.parent / 'frontend'
+
     @app.route('/', methods=['GET'])
     def root_index():
+        accept = request.headers.get('Accept', '')
+        # If client explicitly requests HTML (like web browsers)
+        if 'text/html' in accept and (frontend_dir / 'index.html').exists():
+            return send_from_directory(str(frontend_dir), 'index.html')
         from app.utils.response import success_response
         return success_response(data={
             "application": "PharmaSync CARE Backend API",
-            "version": "2.4.0",
+            "version": "2.5.0",
             "documentation": "/api/health"
         })
+
+    @app.route('/<path:path>', methods=['GET'])
+    def serve_static_frontend(path):
+        if path.startswith('api/'):
+            return error_response(code="NOT_FOUND", message=f"API route '/{path}' not found.", status_code=404)
+        file_path = frontend_dir / path
+        if file_path.exists() and file_path.is_file():
+            return send_from_directory(str(frontend_dir), path)
+        if (frontend_dir / 'index.html').exists() and 'text/html' in request.headers.get('Accept', ''):
+            return send_from_directory(str(frontend_dir), 'index.html')
+        return error_response(code="NOT_FOUND", message=f"Path '/{path}' not found.", status_code=404)
 
     # Centralized Error Handlers
     @app.errorhandler(400)

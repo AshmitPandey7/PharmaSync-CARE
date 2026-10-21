@@ -123,7 +123,7 @@ export async function render(container) {
           <div class="demo-credentials-card">
             <div class="demo-card-header">
               <span class="demo-card-tag">DEMO FACILITY ACCOUNTS</span>
-              <span class="demo-card-hint">Pre-configured accounts</span>
+              <span class="demo-card-hint">Click to sign in instantly</span>
             </div>
             
             <div class="demo-accounts-list">
@@ -132,23 +132,23 @@ export async function render(container) {
                   <strong>admin</strong> &bull; <code>pharmasync2026</code>
                   <span class="demo-role-text">Apex Central Hospital (Chief Pharmacist)</span>
                 </div>
-                <button type="button" class="btn btn-outline btn-sm btn-quick-fill">Auto-fill</button>
+                <button type="button" class="btn btn-outline btn-sm btn-quick-fill">Sign In &rarr;</button>
               </div>
 
               <div class="demo-acc-item" data-user="venkat" data-pass="pharmasync2026">
                 <div class="demo-acc-meta">
                   <strong>venkat</strong> &bull; <code>pharmasync2026</code>
-                  <span class="demo-role-text">City Care Pharmacy (Community Pharmacist)</span>
+                  <span class="demo-role-text">City Care Community Pharmacy (Community Pharmacist)</span>
                 </div>
-                <button type="button" class="btn btn-outline btn-sm btn-quick-fill">Auto-fill</button>
+                <button type="button" class="btn btn-outline btn-sm btn-quick-fill">Sign In &rarr;</button>
               </div>
 
               <div class="demo-acc-item" data-user="joseph" data-pass="pharmasync2026">
                 <div class="demo-acc-meta">
                   <strong>joseph</strong> &bull; <code>pharmasync2026</code>
-                  <span class="demo-role-text">Green Valley Clinic (Clinical Officer)</span>
+                  <span class="demo-role-text">Green Valley Health Centre (Clinical Officer)</span>
                 </div>
-                <button type="button" class="btn btn-outline btn-sm btn-quick-fill">Auto-fill</button>
+                <button type="button" class="btn btn-outline btn-sm btn-quick-fill">Sign In &rarr;</button>
               </div>
             </div>
           </div>
@@ -203,7 +203,7 @@ export async function render(container) {
         usernameInput.value = item.dataset.user;
         passwordInput.value = item.dataset.pass;
         hideError();
-        toast.info('Credentials Populated', `Selected ${item.dataset.user} (${item.dataset.pass})`);
+        handleLogin();
       }
     });
   });
