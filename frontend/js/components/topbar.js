@@ -152,6 +152,23 @@ export const topbar = {
         window.location.hash = '#/landing';
       });
     }
+
+    // Initial Live API Health Check
+    if (!config.DEMO_MODE) {
+      api.getHealth().then(res => {
+        const dot = document.getElementById('mode-status-dot');
+        const label = document.getElementById('mode-status-label');
+        if (dot && label) {
+          if (!res.success) {
+            dot.className = 'mode-status-dot error';
+            label.textContent = 'Live (Offline)';
+          } else {
+            dot.className = 'mode-status-dot live';
+            label.textContent = 'Flask API';
+          }
+        }
+      }).catch(() => {});
+    }
   },
 
   updateTitle(title) {

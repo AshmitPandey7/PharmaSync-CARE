@@ -4,6 +4,7 @@
  */
 
 import { api } from '../api.js';
+import { renderErrorState } from '../components/error-state.js';
 import { toast } from '../components/toast.js';
 import { exportToCSV } from '../components/export-csv.js';
 
@@ -19,6 +20,15 @@ export async function render(container) {
     api.getShortages(),
     api.getFacilities()
   ]);
+
+  if ((!invRes.success && invRes.isNetworkError) || (!facRes.success && facRes.isNetworkError)) {
+    renderErrorState(container, {
+      title: 'Flask API Offline',
+      message: invRes.error || facRes.error,
+      onRetry: () => render(container)
+    });
+    return;
+  }
 
   const inventory = invRes.data || [];
   const transfers = trfRes.data || [];

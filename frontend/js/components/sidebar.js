@@ -106,6 +106,46 @@ export const sidebar = {
           </ul>
         </div>
 
+        <!-- Analytics & Simulation -->
+        <div>
+          <div class="nav-group-title">Analytics & Simulation</div>
+          <ul class="nav-list">
+            <li>
+              <a href="#/analytics" class="nav-link ${activeKey === 'analytics' ? 'active' : ''}">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="20" x2="18" y2="10"/>
+                  <line x1="12" y1="20" x2="12" y2="4"/>
+                  <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+                <span>Reports & Analytics</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#/fairshare" class="nav-link ${activeKey === 'fairshare' ? 'active' : ''}">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 3v18h18"/>
+                  <path d="M18 17V9"/>
+                  <path d="M13 17V5"/>
+                  <path d="M8 17v-3"/>
+                </svg>
+                <span>Fair Allocation</span>
+              </a>
+            </li>
+
+            <li>
+              <a href="#/digital-twin" class="nav-link ${['digital-twin', 'simulations'].includes(activeKey) ? 'active' : ''}">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                <span>Scenario Simulator</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+
         <!-- Directory & Settings -->
         <div>
           <div class="nav-group-title">Directory & System</div>

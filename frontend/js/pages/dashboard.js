@@ -4,6 +4,7 @@
  */
 
 import { api } from '../api.js';
+import { renderErrorState } from '../components/error-state.js';
 
 export async function render(container) {
   const [facilitiesRes, inventoryRes, shortagesRes, transfersRes] = await Promise.all([
@@ -12,6 +13,15 @@ export async function render(container) {
     api.getShortages(),
     api.getTransfers()
   ]);
+
+  if ((!facilitiesRes.success && facilitiesRes.isNetworkError) || (!inventoryRes.success && inventoryRes.isNetworkError)) {
+    renderErrorState(container, {
+      title: 'Flask API Offline',
+      message: facilitiesRes.error || inventoryRes.error,
+      onRetry: () => render(container)
+    });
+    return;
+  }
 
   const facilities = facilitiesRes.data || [];
   const inventory = inventoryRes.data || [];

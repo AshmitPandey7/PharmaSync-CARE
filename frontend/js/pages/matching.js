@@ -5,6 +5,7 @@
  */
 
 import { api } from '../api.js';
+import { renderErrorState } from '../components/error-state.js';
 import { toast } from '../components/toast.js';
 import { modal } from '../components/modal.js';
 
@@ -14,6 +15,16 @@ let currentMatchData = null;
 
 export async function render(container) {
   const shortagesRes = await api.getShortages();
+
+  if (!shortagesRes.success && shortagesRes.isNetworkError) {
+    renderErrorState(container, {
+      title: 'Flask API Offline',
+      message: shortagesRes.error,
+      onRetry: () => render(container)
+    });
+    return;
+  }
+
   allShortages = (shortagesRes.data || []).filter(s => s.status === 'OPEN' || s.status === 'PARTIALLY_MATCHED');
 
   // Check URL query param for pre-selected shortage

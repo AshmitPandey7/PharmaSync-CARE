@@ -17,19 +17,31 @@ import * as matchingPage from './pages/matching.js';
 import * as transfersPage from './pages/transfers.js';
 import * as networkPage from './pages/network.js';
 import * as adminPage from './pages/admin.js';
+import * as analyticsPage from './pages/analytics.js';
+import * as fairsharePage from './pages/fairshare.js';
+import * as digitalTwinPage from './pages/digital-twin.js';
+import * as optimizationPage from './pages/optimization.js';
+import * as decisionExplorerPage from './pages/decision-explorer.js';
+import * as rescuePage from './pages/rescue.js';
 
 const routes = {
   landing: { title: 'Healthcare Inventory Coordination', module: landingPage, public: true },
   login: { title: 'Sign In', module: loginPage, public: true },
   dashboard: { title: 'Dashboard', module: dashboardPage, public: false },
   inventory: { title: 'Medicine Stock', module: inventoryPage, public: false },
-  rescue: { title: 'Medicine Stock', module: inventoryPage, public: false }, // Aliased directly to stock
+  rescue: { title: 'Stock Available to Share', module: rescuePage, public: false },
   shortages: { title: 'Medicine Needed', module: shortagesPage, public: false },
-  needed: { title: 'Medicine Needed', module: shortagesPage, public: false }, // Alias
+  needed: { title: 'Medicine Needed', module: shortagesPage, public: false },
   matching: { title: 'Find Medicines', module: matchingPage, public: false },
   transfers: { title: 'Transfers', module: transfersPage, public: false },
   network: { title: 'Healthcare Facilities', module: networkPage, public: false },
-  admin: { title: 'System & API Settings', module: adminPage, public: false }
+  admin: { title: 'System & API Settings', module: adminPage, public: false },
+  analytics: { title: 'Reports & Analytics', module: analyticsPage, public: false },
+  fairshare: { title: 'Fair Allocation', module: fairsharePage, public: false },
+  'digital-twin': { title: 'Scenario Simulator', module: digitalTwinPage, public: false },
+  simulations: { title: 'Scenario Simulator', module: digitalTwinPage, public: false },
+  optimization: { title: 'Compare Allocation Options', module: optimizationPage, public: false },
+  'decision-explorer': { title: 'What If? Analysis', module: decisionExplorerPage, public: false }
 };
 
 export const router = {

@@ -24,7 +24,7 @@ class DemoStateStore {
 
   loadState() {
     try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_STATE_KEY);
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_STATE_KEY) : null;
       if (saved) {
         return JSON.parse(saved);
       }
@@ -43,14 +43,14 @@ class DemoStateStore {
 
   save() {
     try {
-      localStorage.setItem(LOCAL_STORAGE_STATE_KEY, JSON.stringify(this.state));
+      if (typeof localStorage !== 'undefined') localStorage.setItem(LOCAL_STORAGE_STATE_KEY, JSON.stringify(this.state));
     } catch (e) {
       console.warn('Failed to save state to localStorage', e);
     }
   }
 
   reset() {
-    localStorage.removeItem(LOCAL_STORAGE_STATE_KEY);
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(LOCAL_STORAGE_STATE_KEY);
     this.state = {
       facilities: JSON.parse(JSON.stringify(DEMO_FACILITIES)),
       inventory: JSON.parse(JSON.stringify(DEMO_INVENTORY)),
@@ -96,10 +96,12 @@ async function fetchFromApi(endpoint, options = {}) {
       } catch (e) {
         errorData = { message: response.statusText };
       }
+      const errorMsg = errorData.message || (errorData.error ? errorData.error.message : null) || `Server returned error HTTP ${response.status}`;
       return {
         success: false,
         status: response.status,
-        error: errorData.message || `Server returned error HTTP ${response.status}`,
+        error: errorMsg,
+        details: errorData.error?.details || errorData.details || null,
         data: null
       };
     }
@@ -108,14 +110,15 @@ async function fetchFromApi(endpoint, options = {}) {
     return {
       success: true,
       status: response.status,
-      data: json.data !== undefined ? json.data : json
+      data: json.data !== undefined ? json.data : json,
+      meta: json.meta !== undefined ? json.meta : null
     };
   } catch (err) {
     clearTimeout(timeoutId);
     let errorMessage = err.message;
     if (err.name === 'AbortError') {
       errorMessage = `Request timed out after 8s connecting to Flask backend at ${url}`;
-    } else if (err.message && err.message.includes('Failed to fetch')) {
+    } else if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('fetch failed') || err.message.includes('NetworkError') || err.message.includes('ECONNREFUSED'))) {
       errorMessage = `Cannot connect to Flask API at ${config.API_BASE_URL}. Ensure Flask server is running and CORS is enabled.`;
     }
 
@@ -169,6 +172,99 @@ export const api = {
     }
     return fetchFromApi(`/facilities/${id}`);
   },
+
+  async createFacility(facilityData) {
+    if (config.DEMO_MODE) {
+      const newFacility = {
+        id: `FAC-${String(demoStore.state.facilities.length + 1).padStart(3, '0')}`,
+        active: true,
+        ...facilityData
+      };
+      demoStore.state.facilities.push(newFacility);
+      demoStore.save();
+      return { success: true, data: newFacility };
+    }
+    return fetchFromApi('/facilities', {
+      method: 'POST',
+      body: JSON.stringify(facilityData)
+    });
+  },
+
+  async updateFacility(id, updates) {
+    if (config.DEMO_MODE) {
+      const idx = demoStore.state.facilities.findIndex(f => f.id === id);
+      if (idx === -1) return { success: false, error: 'Facility not found', status: 404 };
+      demoStore.state.facilities[idx] = { ...demoStore.state.facilities[idx], ...updates };
+      demoStore.save();
+      return { success: true, data: demoStore.state.facilities[idx] };
+    }
+    return fetchFromApi(`/facilities/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    });
+  },
+
+  async getDonorFacilities() {
+    if (config.DEMO_MODE) {
+      return { success: true, data: [...demoStore.state.facilities] };
+    }
+    return fetchFromApi('/network/donors');
+  },
+
+  // Medicine Catalogue
+  async getMedicines(filters = {}) {
+    if (config.DEMO_MODE) {
+      const meds = [];
+      const seen = new Set();
+      demoStore.state.inventory.forEach(item => {
+        if (!seen.has(item.medicineName)) {
+          seen.add(item.medicineName);
+          meds.push({
+            id: `MED-${String(seen.size).padStart(3, '0')}`,
+            name: item.medicineName,
+            genericName: item.genericName,
+            category: item.category,
+            strength: item.strength,
+            dosageForm: item.dosageForm || 'Tablet',
+            coldChainRequired: Boolean(item.coldChainRequired),
+            unit: item.unit || 'tablets'
+          });
+        }
+      });
+      return { success: true, data: meds };
+    }
+    const queryParams = new URLSearchParams(filters).toString();
+    return fetchFromApi(`/medicines${queryParams ? '?' + queryParams : ''}`);
+  },
+
+  async getMedicineById(id) {
+    if (config.DEMO_MODE) {
+      return { success: true, data: { id, name: 'Medicine ' + id } };
+    }
+    return fetchFromApi(`/medicines/${id}`);
+  },
+
+  async createMedicine(medicineData) {
+    if (config.DEMO_MODE) {
+      const newMed = { id: `MED-${Math.floor(100 + Math.random() * 900)}`, ...medicineData };
+      return { success: true, data: newMed };
+    }
+    return fetchFromApi('/medicines', {
+      method: 'POST',
+      body: JSON.stringify(medicineData)
+    });
+  },
+
+  async updateMedicine(id, updates) {
+    if (config.DEMO_MODE) {
+      return { success: true, data: { id, ...updates } };
+    }
+    return fetchFromApi(`/medicines/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    });
+  },
+
 
   // Inventory Management
   async getInventory(filters = {}) {
@@ -543,6 +639,17 @@ export const api = {
     });
   },
 
+  async commitAllocation(allocations) {
+    if (config.DEMO_MODE) {
+      return { success: true, data: { committedCount: allocations?.length || 0, status: 'COMMITTED' } };
+    }
+    return fetchFromApi('/allocations/commit', {
+      method: 'POST',
+      body: JSON.stringify({ allocations })
+    });
+  },
+
+
   // Transfer Management
   async getTransfers(filters = {}) {
     if (config.DEMO_MODE) {
@@ -644,6 +751,37 @@ export const api = {
     });
   },
 
+  async approveTransfer(id, note = '') {
+    if (config.DEMO_MODE) {
+      return this.updateTransferStatus(id, 'APPROVED', note);
+    }
+    return fetchFromApi(`/transfers/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    });
+  },
+
+  async dispatchTransfer(id, note = '') {
+    if (config.DEMO_MODE) {
+      return this.updateTransferStatus(id, 'DISPATCHED', note);
+    }
+    return fetchFromApi(`/transfers/${id}/dispatch`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    });
+  },
+
+  async receiveTransfer(id, note = '') {
+    if (config.DEMO_MODE) {
+      return this.updateTransferStatus(id, 'RECEIVED', note);
+    }
+    return fetchFromApi(`/transfers/${id}/receive`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    });
+  },
+
+
   // Audit Logs
   async getAuditLogs() {
     if (config.DEMO_MODE) {
@@ -672,5 +810,146 @@ export const api = {
       return { success: true, data: [...demoStore.state.users] };
     }
     return fetchFromApi('/users');
+  },
+
+  // Executive Dashboard & Analytics
+  async getDashboardSummary(facilityId = null) {
+    if (config.DEMO_MODE) {
+      const inv = demoStore.state.inventory;
+      const sht = demoStore.state.shortages;
+      const trf = demoStore.state.transfers;
+      return {
+        success: true,
+        data: {
+          totalBatches: inv.length,
+          totalAvailableUnits: inv.reduce((sum, b) => sum + (b.availableQuantity || b.totalQuantity || 0), 0),
+          openShortagesCount: sht.filter(s => s.status === 'OPEN' || s.status === 'PARTIALLY_MATCHED').length,
+          totalUnmetUnits: sht.filter(s => s.status === 'OPEN').reduce((sum, s) => sum + (s.unmetQuantity || 0), 0),
+          ongoingTransfersCount: trf.filter(t => ['REQUESTED', 'APPROVED', 'DISPATCHED'].includes(t.status)).length,
+          completedTransfersCount: trf.filter(t => t.status === 'RECEIVED').length,
+          surplusUnitsAvailable: inv.reduce((sum, b) => sum + (b.eligibleSurplusQuantity || 0), 0),
+          urgentAttentionCount: 4
+        }
+      };
+    }
+    const q = facilityId ? `?facilityId=${encodeURIComponent(facilityId)}` : '';
+    return fetchFromApi(`/dashboard/summary${q}`);
+  },
+
+  async getDashboardAnalytics(timeframe = '30') {
+    if (config.DEMO_MODE) {
+      return {
+        success: true,
+        data: {
+          totalUnitsShared: 380,
+          totalRequested: 330,
+          totalFulfilled: 200,
+          fulfillmentRatePct: 61,
+          networkResilienceScore: 92,
+          participation: [],
+          monthlyTrends: {
+            labels: ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
+            transferred: [120, 190, 240, 310, 280, 380],
+            preventedWaste: [80, 140, 210, 270, 250, 350]
+          }
+        }
+      };
+    }
+    return fetchFromApi(`/dashboard/analytics?timeframe=${encodeURIComponent(timeframe)}`);
+  },
+
+  // Digital Twin Simulations
+  async runSimulation(params) {
+    if (config.DEMO_MODE) {
+      const demandMult = Number(params.demandMultiplier || 2.5);
+      const delayHours = Number(params.delayHours || 4);
+      const baseDemand = 3400;
+      const simDemand = Math.round(baseDemand * demandMult);
+      const unmanaged = Math.round(simDemand * (0.35 + (delayHours * 0.003)));
+      const supplied = Math.round(unmanaged * 0.72);
+      return {
+        success: true,
+        data: {
+          simulationId: `SIM-${Math.floor(100 + Math.random() * 900)}`,
+          isSandboxed: true,
+          metrics: {
+            simulatedDemand: simDemand,
+            unmanagedStockouts: unmanaged,
+            suppliedViaNetwork: supplied,
+            resilienceFulfillmentPct: 92,
+            isolatedServiceLevelPct: 65
+          }
+        }
+      };
+    }
+    return fetchFromApi('/simulations', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    });
+  },
+
+  async getSimulations() {
+    if (config.DEMO_MODE) {
+      return { success: true, data: [] };
+    }
+    return fetchFromApi('/simulations');
+  },
+
+  async getSimulationById(id) {
+    if (config.DEMO_MODE) {
+      return { success: false, error: 'Simulation not found in demo mode', status: 404 };
+    }
+    return fetchFromApi(`/simulations/${id}`);
+  },
+
+
+  // Optimization & Counterfactual Sensitivity
+  async runOptimization(params) {
+    if (config.DEMO_MODE) {
+      return {
+        success: true,
+        data: {
+          runId: `OPT-${Math.floor(100 + Math.random() * 900)}`,
+          objectiveScores: { wastePreventionScore: 94, transportEfficiencyScore: 82, speedScore: 88 },
+          allocations: [],
+          tradeoffSummary: 'Optimization balanced waste prevention and transit distance.'
+        }
+      };
+    }
+    return fetchFromApi('/optimization/runs', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    });
+  },
+
+  async getOptimizationRuns() {
+    if (config.DEMO_MODE) {
+      return { success: true, data: [] };
+    }
+    return fetchFromApi('/optimization/runs');
+  },
+
+  async getOptimizationRunById(id) {
+    if (config.DEMO_MODE) {
+      return { success: false, error: 'Run not found in demo mode', status: 404 };
+    }
+    return fetchFromApi(`/optimization/runs/${id}`);
+  },
+
+
+  async runCounterfactual(params) {
+    if (config.DEMO_MODE) {
+      return {
+        success: true,
+        data: {
+          isCounterfactual: true,
+          outcome: { recommendation: 'APPROVE', isFeasible: true, explanation: 'All constraints verified.' }
+        }
+      };
+    }
+    return fetchFromApi('/optimization/counterfactuals', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    });
   }
 };

@@ -8,13 +8,14 @@ const STORAGE_KEY_API_URL = 'pharmasync_api_url';
 const STORAGE_KEY_ACTIVE_FACILITY = 'pharmasync_active_facility';
 
 // Read persisted settings or fallback to defaults
-const savedDemoMode = localStorage.getItem(STORAGE_KEY_DEMO_MODE);
-const isDemoMode = savedDemoMode !== null ? savedDemoMode === 'true' : true;
+const hasStorage = typeof localStorage !== 'undefined';
+const savedDemoMode = hasStorage ? localStorage.getItem(STORAGE_KEY_DEMO_MODE) : null;
+const isDemoMode = savedDemoMode !== null ? savedDemoMode === 'true' : false;
 
-const savedApiUrl = localStorage.getItem(STORAGE_KEY_API_URL);
+const savedApiUrl = hasStorage ? localStorage.getItem(STORAGE_KEY_API_URL) : null;
 const apiUrl = savedApiUrl || 'http://127.0.0.1:5000/api';
 
-const savedFacilityId = localStorage.getItem(STORAGE_KEY_ACTIVE_FACILITY) || 'FAC-001';
+const savedFacilityId = (hasStorage ? localStorage.getItem(STORAGE_KEY_ACTIVE_FACILITY) : null) || 'FAC-001';
 
 export const config = {
   APP_NAME: 'PharmaSync CARE',
@@ -51,17 +52,17 @@ export const config = {
 
   setDemoMode(val) {
     this.DEMO_MODE = Boolean(val);
-    localStorage.setItem(STORAGE_KEY_DEMO_MODE, String(this.DEMO_MODE));
+    if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY_DEMO_MODE, String(this.DEMO_MODE));
   },
 
   setApiBaseUrl(url) {
     this.API_BASE_URL = url.trim().replace(/\/$/, '');
-    localStorage.setItem(STORAGE_KEY_API_URL, this.API_BASE_URL);
+    if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY_API_URL, this.API_BASE_URL);
   },
 
   setActiveFacility(facilityId) {
     this.ACTIVE_FACILITY_ID = facilityId;
     this.CURRENT_USER.facilityId = facilityId;
-    localStorage.setItem(STORAGE_KEY_ACTIVE_FACILITY, facilityId);
+    if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY_ACTIVE_FACILITY, facilityId);
   }
 };

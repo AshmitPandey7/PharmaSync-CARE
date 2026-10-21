@@ -4,6 +4,7 @@
  */
 
 import { api } from '../api.js';
+import { renderErrorState } from '../components/error-state.js';
 
 let facilitiesList = [];
 let mapInstance = null;
@@ -15,6 +16,16 @@ export async function render(container) {
   }
 
   const facRes = await api.getFacilities();
+
+  if (!facRes.success && facRes.isNetworkError) {
+    renderErrorState(container, {
+      title: 'Flask API Offline',
+      message: facRes.error,
+      onRetry: () => render(container)
+    });
+    return;
+  }
+
   facilitiesList = facRes.data || [];
 
   container.innerHTML = `
