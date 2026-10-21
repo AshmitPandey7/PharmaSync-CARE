@@ -36,7 +36,7 @@ export async function render(container) {
         <span class="badge badge-exp-warning">Decision Model</span>
       </div>
       <p style="font-size: 12px; color: var(--text-main); margin: 0; line-height: 1.5;">
-        This prototype evaluates trade-offs between competing priorities (speed, distance, and expiry risk). In full production deployments, exact global solutions are solved via backend linear programming algorithms.
+        This module evaluates trade-offs between competing priorities (speed, distance, and expiry risk). In full production deployments, exact global solutions are solved via backend linear programming algorithms.
       </p>
     </div>
 

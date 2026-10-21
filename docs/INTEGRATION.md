@@ -122,7 +122,7 @@ CORS(app, resources={
 ## 5. Demo Mode vs Live API Mode
 
 1. **Demo Mode (`config.DEMO_MODE = true`):**
-   - Ideal for student presentations, standalone testing, and testing when MySQL is offline.
+   - Ideal for standalone testing, demonstration, and development when MySQL is offline.
    - All state modifications (adding inventory, declaring shortages, advancing transfers) persist in local browser memory.
 2. **Live API Mode (`config.DEMO_MODE = false`):**
    - The frontend issues real `fetch()` HTTP requests to `config.API_BASE_URL`.

@@ -246,9 +246,9 @@ export async function render(container) {
       </div>
     </div>
 
-    <!-- Student Prototype Footer Note -->
+    <!-- Regional Healthcare Network Footer -->
     <div style="color: var(--text-muted); font-size: 11.5px; text-align: center; padding: 8px 0;">
-      Academic DBMS Project Prototype &bull; Operating on synthetic demonstration records &bull; Reset data anytime from top right
+      PharmaSync CARE &bull; Regional Healthcare Facility Distribution Network &bull; Active Context: Apex Central Hospital
     </div>
   `;
 }

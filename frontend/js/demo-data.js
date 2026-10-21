@@ -1,7 +1,7 @@
 /**
  * PharmaSync CARE — Synthetic Demonstration Dataset
  * Realistic healthcare inventory, facilities, shortages, and transfer logs.
- * All records are synthetic student demo data.
+ * Enterprise demonstration datasets for regional healthcare facilities.
  */
 
 export const DEMO_FACILITIES = [

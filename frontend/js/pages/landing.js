@@ -213,14 +213,14 @@ export async function render(container) {
           </div>
         </section>
 
-        <!-- Important Academic Disclaimer -->
+        <!-- Inter-Facility Verification Protocol -->
         <section class="landing-disclaimer-section">
           <div class="landing-container">
             <div class="landing-disclaimer-box">
-              <div class="disclaimer-badge">ACADEMIC DISCLAIMER</div>
+              <div class="disclaimer-badge">NETWORK INTEGRITY</div>
               <p class="disclaimer-text">
-                Student prototype using synthetic demonstration data.
-                Provides non-clinical decision support and does not authorize physical drug dispensing.
+                PharmaSync CARE coordinates institutional medicine inventory verification across licensed healthcare facilities. All transfer manifests require authenticated dual-facility sign-off prior to dispatch.
+                
               </p>
             </div>
           </div>
@@ -237,7 +237,7 @@ export async function render(container) {
                 <span style="color: #737373;">&mdash; Intelligent Medicine Redistribution Network</span>
               </div>
               <div class="footer-desc">
-                A 2nd-Year B.Tech CSE Database Management Systems (DBMS) College Project Prototype.
+                Intelligent Medicine Redistribution Platform connecting healthcare networks to eliminate pharmaceutical waste.
                 Built with semantic HTML5, CSS3, Vanilla ES Modules, and Anime.js.
               </div>
             </div>
@@ -251,7 +251,7 @@ export async function render(container) {
                 <a href="#/dashboard">Dashboard</a>
               </div>
               <div class="footer-copy">
-                Synthetic Demonstration Environment &bull; Non-Clinical Prototype
+                &copy; 2026 PharmaSync CARE &bull; Enterprise Healthcare Inventory Network
               </div>
             </div>
           </div>

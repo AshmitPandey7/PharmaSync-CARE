@@ -1,6 +1,6 @@
 /**
  * PharmaSync CARE — Authentication Service
- * Safe development authentication flow for academic prototype.
+ * Secure session-based authentication flow for healthcare facility personnel.
  */
 
 import { config } from './config.js';

@@ -58,9 +58,9 @@ export async function render(container) {
         A medicine is only marked <strong>Ready to Share</strong> if your facility has enough stock to cover expected patient demand plus an emergency safety reserve. Batches with less than 15 days before expiry are automatically blocked to prevent medicines from expiring en route.
       </p>
 
-      <!-- Progressive Disclosure: Technical details for academic demo -->
+      <!-- Technical Calculation Details -->
       <details class="tech-details-drawer">
-        <summary>View Technical Calculation & Scoring Rules (DBMS Evaluation)</summary>
+        <summary>View Technical Calculation & Scoring Rules</summary>
         <div style="margin-top: 8px; color: var(--slate-300); line-height: 1.6;">
           <div>&bull; <strong>Sharing Formula:</strong> <code>Stock Available to Share = Available Stock - (Expected Demand Before Expiry + Safety Reserve Cushion)</code></div>
           <div>&bull; <strong>Transfer Priority Score (0-100):</strong> Combines days to expiry (up to 45 pts), surplus volume ratio (up to 35 pts), and critical treatment value (up to 20 pts).</div>

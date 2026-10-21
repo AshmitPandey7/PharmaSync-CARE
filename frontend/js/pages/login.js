@@ -122,7 +122,7 @@ export async function render(container) {
           <!-- Evaluator Quick Demo Credentials Card -->
           <div class="demo-credentials-card">
             <div class="demo-card-header">
-              <span class="demo-card-tag">EVALUATOR DEMO CREDENTIALS</span>
+              <span class="demo-card-tag">DEMO FACILITY ACCOUNTS</span>
               <span class="demo-card-hint">Pre-configured accounts</span>
             </div>
             
@@ -154,9 +154,9 @@ export async function render(container) {
           </div>
         </div>
 
-        <!-- Academic Disclaimer Footnote -->
+        <!-- System Security & Authorization Footnote -->
         <div class="login-footer-disclaimer">
-          Student DBMS Prototype &bull; Synthetic Demonstration Data &bull; Non-Clinical Use
+          PharmaSync CARE Enterprise &bull; Authorized Healthcare Personnel Only
         </div>
       </div>
     </div>
@@ -189,8 +189,8 @@ export async function render(container) {
   document.getElementById('btn-forgot-password')?.addEventListener('click', (e) => {
     e.preventDefault();
     toast.info(
-      'Prototype Recovery Notice',
-      'In this student prototype, use the pre-configured evaluator accounts below to sign in instantly.'
+      'Demo Access Notice',
+      'For demonstration access, select one of the pre-configured facility accounts below to sign in instantly.'
     );
   });
 

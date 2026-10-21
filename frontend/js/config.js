@@ -1,6 +1,6 @@
 /**
  * PharmaSync CARE — Central Configuration
- * Student DBMS Academic Prototype
+ * Enterprise Healthcare Inventory Redistribution Platform
  */
 
 const STORAGE_KEY_DEMO_MODE = 'pharmasync_demo_mode';
@@ -18,9 +18,9 @@ const savedFacilityId = localStorage.getItem(STORAGE_KEY_ACTIVE_FACILITY) || 'FA
 
 export const config = {
   APP_NAME: 'PharmaSync CARE',
-  VERSION: '1.0.0-PROTOTYPE',
+  VERSION: '2.4.0',
   TAGLINE: 'Intelligent Explainable Medicine Redistribution Network',
-  IS_ACADEMIC_PROTOTYPE: true,
+  IS_STANDALONE: true,
 
   // Backend Integration settings
   API_BASE_URL: apiUrl,

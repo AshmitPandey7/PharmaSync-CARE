@@ -105,8 +105,8 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
-/* Academic Prototype Disclaimer Banner */
-.academic-disclaimer-banner {
+/* Utility Classes */
+.app-announcement-bar {
   background: #090909;
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-muted);
@@ -122,7 +122,7 @@ a:focus-visible {
   min-height: 28px;
 }
 
-.academic-disclaimer-banner .badge {
+.app-announcement-bar .badge {
   background: #202020;
   color: #F5F5F5;
   border: 1px solid #404040;
@@ -135,7 +135,7 @@ a:focus-visible {
   white-space: nowrap;
 }
 
-.academic-disclaimer-banner .message {
+.app-announcement-bar .message {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -146,14 +146,14 @@ a:focus-visible {
   white-space: nowrap;
 }
 
-.academic-disclaimer-banner .meta {
+.app-announcement-bar .meta {
   color: var(--text-light);
   font-size: 11px;
   white-space: nowrap;
 }
 
 @media (max-width: 900px) {
-  .academic-disclaimer-banner .meta {
+  .app-announcement-bar .meta {
     display: none;
   }
 }

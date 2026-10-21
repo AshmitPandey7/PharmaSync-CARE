@@ -29,7 +29,7 @@ body.public-mode .app-body {
 
 body.public-mode #main-viewport {
   height: auto;
-  min-height: calc(100vh - 28px);
+  min-height: 100vh;
   width: 100%;
   overflow-y: visible;
 }
@@ -48,7 +48,7 @@ body.public-mode #app-content {
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border-subtle);
-  height: calc(100vh - 28px); /* account for disclaimer banner */
+  height: 100vh; /* account for disclaimer banner */
   position: sticky;
   top: 0;
   z-index: 100;
@@ -270,7 +270,7 @@ body.public-mode #app-content {
   flex-direction: column;
   min-width: 0;
   background-color: var(--bg-app);
-  height: calc(100vh - 28px);
+  height: 100vh;
   overflow-y: auto;
 }
 
