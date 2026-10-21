@@ -1,16 +1,18 @@
 /**
- * PharmaSync CARE — Transfers Page
- * Straightforward transfer tracker: sender, receiver, medicine, quantity,
- * and clear status updates (Requested -> Approved -> Dispatched -> Received).
+ * PharmaSync CARE — Multi-Facility Transfers Page
+ * Two-party inter-facility transfer lifecycle:
+ * Sender / Donor (Reviews & Dispatches) -> Receiver / Requester (Inspects & Marks Received).
  */
 
 import { api } from '../api.js';
+import { config } from '../config.js';
 import { renderErrorState } from '../components/error-state.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { exportToCSV } from '../components/export-csv.js';
 
 let transfersList = [];
+let activeTab = 'all'; // 'outgoing' | 'incoming' | 'all'
 
 export async function render(container) {
   const trfRes = await api.getTransfers();
@@ -25,6 +27,20 @@ export async function render(container) {
   }
 
   transfersList = trfRes.data || [];
+  const activeFacilityId = config.ACTIVE_FACILITY_ID;
+  const activeProfile = config.getActiveFacilityProfile();
+
+  const outgoingList = transfersList.filter(t => t.senderFacilityId === activeFacilityId);
+  const incomingList = transfersList.filter(t => t.recipientFacilityId === activeFacilityId);
+
+  // Auto-select smart tab if user has active items
+  if (activeTab === 'all' && (outgoingList.length > 0 || incomingList.length > 0)) {
+    if (outgoingList.some(t => ['REQUESTED', 'APPROVED'].includes(t.status))) {
+      activeTab = 'outgoing';
+    } else if (incomingList.some(t => t.status === 'DISPATCHED')) {
+      activeTab = 'incoming';
+    }
+  }
 
   container.innerHTML = `
     <div class="page-header">
@@ -32,7 +48,7 @@ export async function render(container) {
         <h1 class="page-title">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <rect x="1" y="3" width="15" height="13"/>
-            <polygon points="16 8 20 8 23 11 23 16 16 16 8"/>
+            <polygon points="16 8 20 8 23 11 23 16 16 8"/>
             <circle cx="5.5" cy="18.5" r="2.5"/>
             <circle cx="18.5" cy="18.5" r="2.5"/>
           </svg>
@@ -47,6 +63,46 @@ export async function render(container) {
           Export CSV
         </button>
       </div>
+    </div>
+
+    <!-- Active Facility Perspective Header -->
+    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+          <span class="badge badge-fac-hospital" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Active Facility Persona</span>
+          <strong style="font-size: 15.5px; color: #FFFFFF;">${activeProfile.facilityName}</strong>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted);">
+          Operator: <strong style="color: var(--text-main);">${activeProfile.name}</strong> (${activeProfile.role}) &bull; 
+          Switch facility in topbar to test multi-party approval and receipt workflow.
+        </div>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.35);">
+          ${outgoingList.length} Outgoing (Supplier)
+        </span>
+        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.35);">
+          ${incomingList.length} Incoming (Recipient)
+        </span>
+      </div>
+    </div>
+
+    <!-- Perspective Navigation Tabs -->
+    <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+      <button class="btn btn-sm ${activeTab === 'outgoing' ? 'btn-primary' : 'btn-outline'}" id="tab-trf-outgoing" style="font-size: 12px;">
+        Outgoing Transfers (We are Supplier: ${outgoingList.length})
+      </button>
+      <button class="btn btn-sm ${activeTab === 'incoming' ? 'btn-primary' : 'btn-outline'}" id="tab-trf-incoming" style="font-size: 12px;">
+        Incoming Orders (We are Recipient: ${incomingList.length})
+      </button>
+      <button class="btn btn-sm ${activeTab === 'all' ? 'btn-primary' : 'btn-outline'}" id="tab-trf-all" style="font-size: 12px;">
+        All Network Transfers (${transfersList.length})
+      </button>
+    </div>
+
+    <!-- Tab Explanatory Notice -->
+    <div id="tab-notice" style="background: #171717; border: 1px solid #303030; border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: var(--text-main);">
+      ${getTabNoticeText(activeTab, activeProfile)}
     </div>
 
     <!-- Search & Filter Toolbar -->
@@ -68,7 +124,7 @@ export async function render(container) {
         </div>
       </div>
 
-      <!-- Straightforward Table -->
+      <!-- Transfers Data Table -->
       <div class="data-table-scroll">
         <table class="data-table">
           <thead>
@@ -78,8 +134,8 @@ export async function render(container) {
               <th>Quantity</th>
               <th>Sender (Supplier)</th>
               <th>Receiver (Requester)</th>
-              <th>Current Status</th>
-              <th>Update Status</th>
+              <th>Status</th>
+              <th>Action Needed</th>
               <th>Details</th>
             </tr>
           </thead>
@@ -95,14 +151,34 @@ export async function render(container) {
   setupEvents();
 }
 
+function getTabNoticeText(tab, profile) {
+  if (tab === 'outgoing') {
+    return `<strong>Outgoing Shipments:</strong> Partner healthcare facilities have requested medicines from <strong>${profile.facilityName}</strong>. As the supplying pharmacist, you hold authority to <strong>Approve</strong> the allocation and <strong>Dispatch</strong> the shipment.`;
+  }
+  if (tab === 'incoming') {
+    return `<strong>Incoming Orders:</strong> Medicines ordered for <strong>${profile.facilityName}</strong> to resolve stockouts. When a shipment is dispatched, your clinic personnel verify physical arrival and click <strong>Mark Received</strong>.`;
+  }
+  return `<strong>All Network Transfers:</strong> Complete ledger of all inter-facility medicine transfers across the regional healthcare network.`;
+}
+
 function renderTableRows() {
   const tbody = document.getElementById('transfers-table-body');
   if (!tbody) return;
 
+  const activeFacilityId = config.ACTIVE_FACILITY_ID;
   const q = (document.getElementById('trf-search')?.value || '').toLowerCase().trim();
   const statusFilter = document.getElementById('trf-filter-status')?.value || 'ALL';
 
-  const filtered = transfersList.filter(t => {
+  let list = [...transfersList];
+
+  // Filter by perspective tab
+  if (activeTab === 'outgoing') {
+    list = list.filter(t => t.senderFacilityId === activeFacilityId);
+  } else if (activeTab === 'incoming') {
+    list = list.filter(t => t.recipientFacilityId === activeFacilityId);
+  }
+
+  const filtered = list.filter(t => {
     const matchQ = !q ||
       t.transferCode.toLowerCase().includes(q) ||
       t.medicineName.toLowerCase().includes(q) ||
@@ -110,17 +186,22 @@ function renderTableRows() {
       t.recipientFacilityName.toLowerCase().includes(q);
 
     const matchS = statusFilter === 'ALL' || t.status === statusFilter;
-
     return matchQ && matchS;
   });
 
   if (filtered.length === 0) {
+    const emptyMsg = activeTab === 'outgoing'
+      ? `No outgoing transfers from this facility. Other clinics have not requested stock from you yet.`
+      : (activeTab === 'incoming' 
+        ? `No incoming orders for this facility. Go to "Find Medicines" to request stock from other facilities.`
+        : `No orders match your filter criteria.`);
+
     tbody.innerHTML = `
       <tr>
         <td colspan="8">
           <div class="empty-state">
             <div class="empty-state-title">No transfer orders found</div>
-            <div class="empty-state-desc">No orders match your search criteria.</div>
+            <div class="empty-state-desc">${emptyMsg}</div>
           </div>
         </td>
       </tr>
@@ -129,6 +210,9 @@ function renderTableRows() {
   }
 
   tbody.innerHTML = filtered.map(t => {
+    const isSender = t.senderFacilityId === activeFacilityId;
+    const isRecipient = t.recipientFacilityId === activeFacilityId;
+
     return `
       <tr>
         <td>
@@ -143,16 +227,18 @@ function renderTableRows() {
           <span class="text-muted" style="font-size: 11px;"> units</span>
         </td>
         <td style="font-size: 12.5px;">
-          <strong>${t.senderFacilityName}</strong>
+          <strong style="${isSender ? 'color: #FBBF24;' : ''}">${t.senderFacilityName}</strong>
+          ${isSender ? '<div class="text-muted" style="font-size: 10.5px;">(Your Facility &bull; Supplier)</div>' : ''}
         </td>
         <td style="font-size: 12.5px;">
-          <strong>${t.recipientFacilityName}</strong>
+          <strong style="${isRecipient ? 'color: #34D399;' : ''}">${t.recipientFacilityName}</strong>
+          ${isRecipient ? '<div class="text-muted" style="font-size: 10.5px;">(Your Facility &bull; Recipient)</div>' : ''}
         </td>
         <td>
           <span class="badge badge-status-${t.status.toLowerCase()}">${t.status}</span>
         </td>
         <td>
-          ${getNextActionButton(t)}
+          ${getRoleAwareActionButton(t, isSender, isRecipient)}
         </td>
         <td>
           <button class="btn btn-outline btn-sm btn-inspect-transfer" data-id="${t.id}" style="padding: 4px 8px; font-size: 11px;">
@@ -178,37 +264,85 @@ function renderTableRows() {
   });
 }
 
-function getNextActionButton(t) {
+function getRoleAwareActionButton(t, isSender, isRecipient) {
+  // If user is Sender (Supplier)
+  if (isSender) {
+    if (t.status === 'PROPOSED' || t.status === 'REQUESTED') {
+      return `
+        <button class="btn btn-primary btn-sm btn-advance-status" data-id="${t.id}" data-next-status="APPROVED" style="padding: 4px 10px; font-size: 11.5px; white-space: nowrap; background: #FFFFFF; color: #000000; font-weight: 700;">
+          Approve Request &rarr;
+        </button>
+      `;
+    }
+    if (t.status === 'APPROVED') {
+      return `
+        <button class="btn btn-primary btn-sm btn-advance-status" data-id="${t.id}" data-next-status="DISPATCHED" style="padding: 4px 10px; font-size: 11.5px; white-space: nowrap; background: #38BDF8; border-color: #38BDF8; color: #000000; font-weight: 700;">
+          Dispatch Shipment &rarr;
+        </button>
+      `;
+    }
+    if (t.status === 'DISPATCHED') {
+      return `<span class="badge" style="background: rgba(14, 165, 233, 0.15); color: #38BDF8; border: 1px solid rgba(14, 165, 233, 0.35); font-size: 10.5px;">En Route &bull; Awaiting Receipt</span>`;
+    }
+    if (t.status === 'RECEIVED') {
+      return `<span class="badge badge-exp-safe">&#10003; Delivered</span>`;
+    }
+  }
+
+  // If user is Recipient (Requester)
+  if (isRecipient) {
+    if (t.status === 'PROPOSED' || t.status === 'REQUESTED') {
+      return `<span class="badge badge-exp-warning" style="font-size: 10.5px;">&#9203; Awaiting Supplier Approval</span>`;
+    }
+    if (t.status === 'APPROVED') {
+      return `<span class="badge badge-fac-hospital" style="font-size: 10.5px;">&#9203; Approved &bull; In Prep</span>`;
+    }
+    if (t.status === 'DISPATCHED') {
+      return `
+        <button class="btn btn-primary btn-sm btn-advance-status" data-id="${t.id}" data-next-status="RECEIVED" style="padding: 4px 10px; font-size: 11.5px; white-space: nowrap; background: #10B981; border-color: #10B981; color: #000000; font-weight: 700;">
+          Mark Received &#10003;
+        </button>
+      `;
+    }
+    if (t.status === 'RECEIVED') {
+      return `<span class="badge badge-exp-safe">&#10003; Stock Credited</span>`;
+    }
+  }
+
+  // Global / Administrator view (Neither sender nor recipient)
   if (t.status === 'PROPOSED' || t.status === 'REQUESTED') {
     return `
-      <button class="btn btn-primary btn-sm btn-advance-status" data-id="${t.id}" data-next-status="APPROVED" style="padding: 4px 10px; font-size: 11.5px; white-space: nowrap;">
-        Approve &rarr;
+      <button class="btn btn-outline btn-sm btn-advance-status" data-id="${t.id}" data-next-status="APPROVED" style="padding: 3px 8px; font-size: 11px;">
+        Approve (Supplier) &rarr;
       </button>
     `;
   }
   if (t.status === 'APPROVED') {
     return `
-      <button class="btn btn-primary btn-sm btn-advance-status" data-id="${t.id}" data-next-status="DISPATCHED" style="padding: 4px 10px; font-size: 11.5px; white-space: nowrap; background: var(--teal-600);">
-        Dispatch &rarr;
+      <button class="btn btn-outline btn-sm btn-advance-status" data-id="${t.id}" data-next-status="DISPATCHED" style="padding: 3px 8px; font-size: 11px;">
+        Dispatch (Supplier) &rarr;
       </button>
     `;
   }
   if (t.status === 'DISPATCHED') {
     return `
-      <button class="btn btn-primary btn-sm btn-advance-status" data-id="${t.id}" data-next-status="RECEIVED" style="padding: 4px 10px; font-size: 11.5px; white-space: nowrap; background: var(--emerald-600);">
-        Mark Received &#10003;
+      <button class="btn btn-outline btn-sm btn-advance-status" data-id="${t.id}" data-next-status="RECEIVED" style="padding: 3px 8px; font-size: 11px;">
+        Mark Received (Clinic) &#10003;
       </button>
     `;
   }
-  if (t.status === 'RECEIVED') {
-    return `<span class="badge badge-exp-safe">&#10003; Received</span>`;
-  }
-  return `<span class="badge badge-exp-warning">${t.status}</span>`;
+  return `<span class="badge badge-exp-safe">&#10003; Completed</span>`;
 }
 
 function handleAdvanceStatus(transferId, nextStatus) {
   const trf = transfersList.find(t => t.id === transferId);
   if (!trf) return;
+
+  const profile = config.getActiveFacilityProfile();
+  let defaultNote = `Verified by ${profile.name} (${profile.facilityName})`;
+  if (nextStatus === 'APPROVED') defaultNote = `Approved for dispatch by ${profile.name} at ${trf.senderFacilityName}`;
+  if (nextStatus === 'DISPATCHED') defaultNote = `Packed and dispatched via transit vehicle by ${profile.name}`;
+  if (nextStatus === 'RECEIVED') defaultNote = `Received in good condition and stock credited by ${profile.name} at ${trf.recipientFacilityName}`;
 
   const content = `
     <form id="form-advance-status" onsubmit="return false;">
@@ -223,16 +357,16 @@ function handleAdvanceStatus(transferId, nextStatus) {
           <span><strong>Quantity:</strong> ${trf.quantity} units</span>
         </div>
         <div class="modal-info-meta" style="margin-top: 4px;">
-          <span><strong>From:</strong> ${trf.senderFacilityName}</span>
+          <span><strong>Supplier (Sender):</strong> ${trf.senderFacilityName}</span>
           <span>&rarr;</span>
-          <span><strong>To:</strong> ${trf.recipientFacilityName}</span>
+          <span><strong>Requester (Receiver):</strong> ${trf.recipientFacilityName}</span>
         </div>
       </div>
 
       <div class="form-group">
         <label class="form-label" for="status-note-input">Pharmacist Verification Note / Sign-off:</label>
-        <input type="text" id="status-note-input" class="form-input" placeholder="e.g. Stock verified and marked as ${nextStatus.toLowerCase()}" value="Verified and marked ${nextStatus}" />
-        <span class="form-help">This action will be logged in the immutable audit trail with your pharmacist signature</span>
+        <input type="text" id="status-note-input" class="form-input" value="${defaultNote}" />
+        <span class="form-help">Signed by ${profile.name} (${profile.role}). This action is logged into the audit trail.</span>
       </div>
     </form>
   `;
@@ -314,7 +448,7 @@ function openInspectModal(trf) {
                 <strong style="color: var(--text-heading);">${h.status}</strong>
                 <span class="text-muted" style="font-family: var(--font-mono); font-size: 11px;">${h.timestamp}</span>
               </div>
-              <div class="text-muted" style="font-size: 11px;">By: ${h.by} ${h.note ? `&bull; ${h.note}` : ''}</div>
+              <div class="text-muted" style="font-size: 11px;">By: ${h.by || h.user || 'Pharmacist'} ${h.note ? `&bull; ${h.note}` : ''}</div>
             </div>
           `).join('')}
         </div>
@@ -337,6 +471,25 @@ function setupEvents() {
   document.getElementById('trf-search')?.addEventListener('input', renderTableRows);
   document.getElementById('trf-filter-status')?.addEventListener('change', renderTableRows);
 
+  // Tab switching
+  document.getElementById('tab-trf-outgoing')?.addEventListener('click', (e) => {
+    activeTab = 'outgoing';
+    updateTabUI();
+    renderTableRows();
+  });
+
+  document.getElementById('tab-trf-incoming')?.addEventListener('click', (e) => {
+    activeTab = 'incoming';
+    updateTabUI();
+    renderTableRows();
+  });
+
+  document.getElementById('tab-trf-all')?.addEventListener('click', (e) => {
+    activeTab = 'all';
+    updateTabUI();
+    renderTableRows();
+  });
+
   document.getElementById('btn-export-transfers')?.addEventListener('click', () => {
     exportToCSV('PharmaSync_Transfers', transfersList.map(t => ({
       OrderCode: t.transferCode,
@@ -348,5 +501,24 @@ function setupEvents() {
       Status: t.status
     })));
     toast.success('Export Complete', 'Transfers exported in CSV format.');
+  });
+}
+
+function updateTabUI() {
+  const profile = config.getActiveFacilityProfile();
+  const noticeEl = document.getElementById('tab-notice');
+  if (noticeEl) {
+    noticeEl.innerHTML = getTabNoticeText(activeTab, profile);
+  }
+
+  ['outgoing', 'incoming', 'all'].forEach(t => {
+    const btn = document.getElementById(`tab-trf-${t}`);
+    if (btn) {
+      if (activeTab === t) {
+        btn.className = 'btn btn-sm btn-primary';
+      } else {
+        btn.className = 'btn btn-sm btn-outline';
+      }
+    }
   });
 }

@@ -5,6 +5,7 @@
 import { config } from '../config.js';
 import { api } from '../api.js';
 import { auth } from '../auth.js';
+import { sidebar } from './sidebar.js';
 import { toast } from './toast.js';
 
 export const topbar = {
@@ -35,11 +36,11 @@ export const topbar = {
           <label for="topbar-facility-select">Facility:</label>
           <select id="topbar-facility-select" class="facility-select">
             <option value="FAC-001" ${config.ACTIVE_FACILITY_ID === 'FAC-001' ? 'selected' : ''}>Apex Central Hospital</option>
-            <option value="FAC-002" ${config.ACTIVE_FACILITY_ID === 'FAC-002' ? 'selected' : ''}>City Care Pharmacy</option>
+            <option value="FAC-002" ${config.ACTIVE_FACILITY_ID === 'FAC-002' ? 'selected' : ''}>City Care Community Pharmacy</option>
             <option value="FAC-003" ${config.ACTIVE_FACILITY_ID === 'FAC-003' ? 'selected' : ''}>Green Valley Health Centre</option>
-            <option value="FAC-004" ${config.ACTIVE_FACILITY_ID === 'FAC-004' ? 'selected' : ''}>Metro Health Center</option>
-            <option value="FAC-005" ${config.ACTIVE_FACILITY_ID === 'FAC-005' ? 'selected' : ''}>St. Jude Dispensary</option>
-            <option value="FAC-006" ${config.ACTIVE_FACILITY_ID === 'FAC-006' ? 'selected' : ''}>District Logistics Hub</option>
+            <option value="FAC-004" ${config.ACTIVE_FACILITY_ID === 'FAC-004' ? 'selected' : ''}>Metro Health Medical Center</option>
+            <option value="FAC-005" ${config.ACTIVE_FACILITY_ID === 'FAC-005' ? 'selected' : ''}>St. Jude Charitable Dispensary</option>
+            <option value="FAC-006" ${config.ACTIVE_FACILITY_ID === 'FAC-006' ? 'selected' : ''}>District Medical Logistics Hub</option>
           </select>
         </div>
 
@@ -92,7 +93,9 @@ export const topbar = {
     if (facilitySelect) {
       facilitySelect.addEventListener('change', (e) => {
         config.setActiveFacility(e.target.value);
-        toast.info('Facility Switched', `Active view updated to ${e.target.options[e.target.selectedIndex].text}`);
+        const profile = config.getActiveFacilityProfile();
+        sidebar.render();
+        toast.info('Facility Switched', `Now operating as ${profile.name} (${profile.facilityName})`);
         window.dispatchEvent(new CustomEvent('pharmasync:facility-changed', { detail: { facilityId: e.target.value } }));
       });
     }
@@ -108,43 +111,35 @@ export const topbar = {
           const health = await api.getHealth();
 
           if (!health.success) {
-            document.getElementById('mode-status-dot').className = 'mode-status-dot error';
-            document.getElementById('mode-status-label').textContent = 'Live (Offline)';
-            modeSwitchBtn.textContent = 'Switch Demo';
-            toast.error(
-              'Backend Offline',
-              `Could not reach Flask at ${config.API_BASE_URL}. You can run the Flask server or switch back to Demo Mode.`
-            );
-          } else {
-            document.getElementById('mode-status-dot').className = 'mode-status-dot live';
-            document.getElementById('mode-status-label').textContent = 'Flask API';
-            modeSwitchBtn.textContent = 'Switch Demo';
-            toast.success('Connected to Flask', 'Live API mode activated successfully.');
+            config.setDemoMode(true);
+            toast.error('Flask API Offline', 'Could not reach Flask server on port 5000. Reverted to Demo Mode.');
+            return;
           }
+
+          toast.success('Connected to Live Backend', `Connected to Flask API with ${health.data?.engine || 'MongoDB'}`);
         } else {
           // Switch to Demo Mode
           config.setDemoMode(true);
-          document.getElementById('mode-status-dot').className = 'mode-status-dot demo';
-          document.getElementById('mode-status-label').textContent = 'Demo Mode';
-          modeSwitchBtn.textContent = 'Switch Live';
-          toast.success('Demo Mode Active', 'Now using synthetic demonstration dataset.');
+          toast.info('Demo Mode Activated', 'Now using synthetic demonstration state.');
         }
 
         window.dispatchEvent(new CustomEvent('pharmasync:mode-changed', { detail: { demoMode: config.DEMO_MODE } }));
       });
     }
 
-    // Quick Data Reset
+    // Reset Data Handler
     const resetBtn = document.getElementById('btn-quick-reset');
     if (resetBtn) {
-      resetBtn.addEventListener('click', () => {
-        api.resetDemoData();
-        toast.success('State Reset', 'Synthetic demo data restored to initial baseline.');
-        window.dispatchEvent(new CustomEvent('pharmasync:data-reset'));
+      resetBtn.addEventListener('click', async () => {
+        if (confirm('Reset all demonstration data (inventory, requests, transfers) back to original state?')) {
+          await api.resetAllData();
+          toast.success('Data Reset', 'Demo database restored to default initial state.');
+          window.dispatchEvent(new CustomEvent('pharmasync:data-reset'));
+        }
       });
     }
 
-    // Topbar Sign Out
+    // Topbar Sign Out Handler
     const topbarLogoutBtn = document.getElementById('btn-topbar-logout');
     if (topbarLogoutBtn) {
       topbarLogoutBtn.addEventListener('click', () => {
@@ -174,5 +169,9 @@ export const topbar = {
   updateTitle(title) {
     const titleEl = document.getElementById('topbar-page-title');
     if (titleEl) titleEl.textContent = title;
+    const facilitySelect = document.getElementById('topbar-facility-select');
+    if (facilitySelect && facilitySelect.value !== config.ACTIVE_FACILITY_ID) {
+      facilitySelect.value = config.ACTIVE_FACILITY_ID;
+    }
   }
 };

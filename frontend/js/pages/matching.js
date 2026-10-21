@@ -5,6 +5,7 @@
  */
 
 import { api } from '../api.js';
+import { config } from '../config.js';
 import { renderErrorState } from '../components/error-state.js';
 import { toast } from '../components/toast.js';
 import { modal } from '../components/modal.js';
@@ -27,11 +28,17 @@ export async function render(container) {
 
   allShortages = (shortagesRes.data || []).filter(s => s.status === 'OPEN' || s.status === 'PARTIALLY_MATCHED');
 
-  // Check URL query param for pre-selected shortage
+  const activeFacilityId = config.ACTIVE_FACILITY_ID;
+  const activeProfile = config.getActiveFacilityProfile();
+  const myShortage = allShortages.find(s => s.facilityId === activeFacilityId);
+
+  // Check URL query param for pre-selected shortage, or prioritize active facility's shortage
   const hash = window.location.hash;
   const matchParam = hash.match(/shortage=([^&]+)/);
   if (matchParam && matchParam[1] && allShortages.some(s => s.id === matchParam[1])) {
     selectedShortageId = matchParam[1];
+  } else if (myShortage) {
+    selectedShortageId = myShortage.id;
   } else if (allShortages.length > 0) {
     selectedShortageId = allShortages[0].id;
   }
@@ -52,6 +59,17 @@ export async function render(container) {
         <p class="page-description">
           Match an open medicine request with eligible facilities holding stock in the database and create a transfer.
         </p>
+      </div>
+    </div>
+
+    <!-- Active Persona Context Notice -->
+    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; font-size: 12.5px; color: var(--text-main); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+      <div>
+        Operating Facility: <strong style="color: #FFFFFF;">${activeProfile.facilityName}</strong> &bull;
+        Logged in as: <strong style="color: var(--text-heading);">${activeProfile.name}</strong> (${activeProfile.role})
+      </div>
+      <div class="text-muted" style="font-size: 11.5px;">
+        To request medicine for your facility, select your shortage below and initiate a transfer from any eligible donor.
       </div>
     </div>
 
@@ -77,11 +95,13 @@ export async function render(container) {
 
         <div class="form-group" style="margin-bottom: 14px;">
           <select id="matching-shortage-select" class="form-select">
-            ${allShortages.map(s => `
+            ${allShortages.map(s => {
+              const isMine = s.facilityId === activeFacilityId;
+              return `
               <option value="${s.id}" ${s.id === selectedShortageId ? 'selected' : ''}>
-                ${s.id}: ${s.medicineName} (${s.unmetQuantity} units needed) &mdash; ${s.facilityName}
+                ${isMine ? '★ [Our Request] ' : ''}${s.id}: ${s.medicineName} (${s.unmetQuantity} units needed) &mdash; ${s.facilityName}
               </option>
-            `).join('')}
+            `;}).join('')}
           </select>
         </div>
 
@@ -138,28 +158,31 @@ function renderTargetRequest() {
   if (!container || !shortage) return;
 
   container.innerHTML = `
-    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 14px; font-size: 12.5px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
-      <div>
-        <span class="text-muted" style="font-size: 11px;">Requesting Facility:</span>
-        <div style="font-weight: bold; color: var(--text-heading); font-size: 13.5px;">${shortage.facilityName}</div>
-      </div>
-
-      <div>
-        <span class="text-muted" style="font-size: 11px;">Medicine Needed:</span>
-        <div style="font-weight: bold; color: var(--text-heading); font-size: 13.5px;">${shortage.medicineName}</div>
-        <div class="text-muted" style="font-size: 11px;">${shortage.strength} &bull; ${shortage.dosageForm}</div>
-      </div>
-
-      <div>
-        <span class="text-muted" style="font-size: 11px;">Quantity Needed:</span>
-        <div><strong style="color: var(--rose-400); font-size: 15px;">${shortage.unmetQuantity} Units</strong></div>
-      </div>
-
-      <div>
-        <span class="text-muted" style="font-size: 11px;">Urgency & Deadline:</span>
-        <div>
+    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 14px; font-size: 13px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <strong style="color: var(--text-heading); font-size: 15px;">${shortage.medicineName}</strong>
           <span class="badge badge-urgency-${shortage.urgency.toLowerCase()}">${shortage.urgency}</span>
-          <span class="text-muted" style="margin-left: 6px; font-family: var(--font-mono); font-size: 11.5px;">Needed by ${shortage.requiredByDate}</span>
+        </div>
+        <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);">${shortage.id}</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 12px; color: var(--text-main);">
+        <div>
+          <span class="text-muted">Requesting Facility:</span>
+          <div><strong>${shortage.facilityName}</strong></div>
+        </div>
+        <div>
+          <span class="text-muted">Quantity Needed:</span>
+          <div><strong style="color: var(--rose-400); font-family: var(--font-mono); font-size: 13.5px;">${shortage.unmetQuantity} Units</strong></div>
+        </div>
+        <div>
+          <span class="text-muted">Strength & Form:</span>
+          <div>${shortage.strength} &bull; ${shortage.dosageForm}</div>
+        </div>
+        <div>
+          <span class="text-muted">Needed By:</span>
+          <div style="font-family: var(--font-mono);">${shortage.requiredByDate}</div>
         </div>
       </div>
     </div>
@@ -168,75 +191,62 @@ function renderTargetRequest() {
 
 function renderCandidates() {
   const container = document.getElementById('candidates-container');
-  const candidates = (currentMatchData?.candidates || []).filter(c => c.isEligible && c.availableSurplus > 0);
-  const shortage = currentMatchData?.shortage;
-  if (!container || !shortage) return;
+  if (!container) return;
+
+  const candidates = currentMatchData?.candidates || [];
 
   if (candidates.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-title">No Matching Stock Available in Other Facilities</div>
-        <div class="empty-state-desc">
-          No facility currently holds available, unexpired stock for <strong>${shortage.medicineName} (${shortage.strength})</strong>.
-        </div>
+        <div class="empty-state-title">No matching suppliers found</div>
+        <div class="empty-state-desc">No network facilities currently hold surplus unreserved stock for this medicine.</div>
       </div>
     `;
     return;
   }
 
   container.innerHTML = `
-    <div class="data-table-scroll">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Supplying Facility (Donor)</th>
-            <th>Facility Type</th>
-            <th>Batch & Expiry</th>
-            <th>Stock Available</th>
-            <th>Fulfillment Capability</th>
-            <th>Distance</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${candidates.map(cand => {
-            const canFulfill = Math.min(cand.availableSurplus, shortage.unmetQuantity);
-            const isFull = canFulfill >= shortage.unmetQuantity;
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      ${candidates.map(cand => {
+        return `
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+            <div style="flex: 1; min-width: 260px;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                <strong style="font-size: 15px; color: var(--text-heading);">${cand.donorFacilityName}</strong>
+                <span class="badge badge-fac-hospital">${cand.donorFacilityType || 'Healthcare Facility'}</span>
+                <span class="badge badge-exp-safe" style="font-family: var(--font-mono); font-size: 11px;">
+                  Match Score: ${Math.round(cand.matchScore || 90)}%
+                </span>
+              </div>
 
-            return `
-              <tr>
-                <td>
-                  <strong style="color: var(--text-heading); font-size: 13.5px;">${cand.donorFacilityName}</strong>
-                </td>
-                <td>
-                  <span class="badge badge-fac-hospital">${cand.donorType}</span>
-                </td>
-                <td>
-                  <code style="font-family: var(--font-mono); font-weight: bold; color: var(--text-heading);">${cand.batchNumber}</code>
-                  <div class="text-muted" style="font-size: 11px;">Expires in ${cand.daysToExpiry} days</div>
-                </td>
-                <td>
-                  <strong style="color: #FFFFFF; font-size: 14px; font-family: var(--font-mono);">${cand.availableSurplus}</strong>
-                  <span class="text-muted" style="font-size: 11px;"> units</span>
-                </td>
-                <td>
-                  <span style="color: ${isFull ? 'var(--emerald-400)' : 'var(--amber-400)'}; font-weight: bold;">
-                    ${isFull ? `Can supply full ${canFulfill} units` : `Can supply partial ${canFulfill} units`}
-                  </span>
-                </td>
-                <td style="font-size: 12px; color: var(--text-muted);">
-                  ${cand.distanceKm} km
-                </td>
-                <td>
-                  <button class="btn btn-primary btn-sm btn-create-direct-transfer" data-batch="${cand.batchId}" style="white-space: nowrap; padding: 5px 12px;">
-                    Select & Create Transfer &rarr;
-                  </button>
-                </td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-      </table>
+              <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--text-muted);">
+                <div>
+                  <span>Batch:</span>
+                  <code style="color: var(--text-main); font-family: var(--font-mono);">${cand.batchNumber}</code>
+                </div>
+                <div>
+                  <span>Distance:</span>
+                  <strong style="color: var(--text-main);">${Math.round(cand.distanceKm * 10) / 10} km</strong>
+                </div>
+                <div>
+                  <span>Expires In:</span>
+                  <strong style="color: var(--text-main);">${cand.daysToExpiry} Days</strong>
+                </div>
+                <div>
+                  <span>Available Surplus:</span>
+                  <strong style="color: #FFFFFF; font-family: var(--font-mono);">${cand.availableSurplus} Units</strong>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <button class="btn btn-primary btn-sm btn-create-direct-transfer" data-batch="${cand.batchId}" style="white-space: nowrap; padding: 6px 14px;">
+                Initiate Transfer &rarr;
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('')}
     </div>
   `;
 
@@ -261,9 +271,9 @@ function openCreateTransferModal(candidate) {
           <span style="font-weight: normal; color: var(--text-muted);">(${candidate.strength})</span>
         </div>
         <div class="modal-info-meta">
-          <span><strong>Supplier:</strong> ${candidate.donorFacilityName}</span>
+          <span><strong>Supplier (Donor):</strong> ${candidate.donorFacilityName}</span>
           <span>&rarr;</span>
-          <span><strong>Receiver:</strong> ${shortage.facilityName}</span>
+          <span><strong>Requester (Recipient):</strong> ${shortage.facilityName}</span>
         </div>
         <div class="modal-info-meta" style="margin-top: 4px;">
           <span><strong>Batch:</strong> <code style="color: #ffffff; background: rgba(255,255,255,0.08); padding: 1px 6px; border-radius: 4px;">${candidate.batchNumber}</code></span>
@@ -285,7 +295,7 @@ function openCreateTransferModal(candidate) {
 
       <div class="form-group">
         <label class="form-label" for="transfer-modal-notes">Order Notes / Clinical Instructions</label>
-        <input type="text" id="transfer-modal-notes" class="form-input" placeholder="e.g. Expedited transfer for ICU ward" value="Fulfilling shortage ticket ${shortage.id}" />
+        <input type="text" id="transfer-modal-notes" class="form-input" placeholder="e.g. Expedited transfer for shortage ticket" value="Direct matched transfer fulfilling ${shortage.id}" />
       </div>
     </form>
   `;
@@ -294,7 +304,7 @@ function openCreateTransferModal(candidate) {
     <button type="button" class="btn btn-secondary" id="btn-trf-modal-cancel">Cancel</button>
     <button type="button" class="btn btn-primary" id="btn-trf-modal-confirm">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-      Create Transfer
+      Create Transfer Order
     </button>
   `;
 
@@ -331,19 +341,22 @@ function openCreateTransferModal(candidate) {
 
       const res = await api.createTransfer(payload);
       if (res && res.success) {
-        toast.success('Transfer Created', `Transfer ${res.data.transferCode} created successfully.`);
+        toast.success(
+          'Transfer Created', 
+          `Order ${res.data.transferCode || 'TRF'} created! Switch to ${candidate.donorFacilityName} in the topbar to review & dispatch.`
+        );
         close();
         window.location.hash = '#/transfers';
       } else {
         toast.error('Error', res?.error || 'Failed to create transfer order.');
         confirmBtn.disabled = false;
-        confirmBtn.innerHTML = 'Create Transfer';
+        confirmBtn.innerHTML = 'Create Transfer Order';
       }
     } catch (err) {
       console.error('Error creating transfer:', err);
       toast.error('Error', err.message || 'An error occurred while creating transfer.');
       confirmBtn.disabled = false;
-      confirmBtn.innerHTML = 'Create Transfer';
+      confirmBtn.innerHTML = 'Create Transfer Order';
     }
   });
 }

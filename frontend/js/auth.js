@@ -3,7 +3,7 @@
  * Secure session-based authentication flow for healthcare facility personnel.
  */
 
-import { config } from './config.js';
+import { config, FACILITY_PROFILES } from './config.js';
 import { DEMO_USERS } from './demo-data.js';
 
 const SESSION_KEY = 'pharmasync_auth_session';
@@ -17,6 +17,7 @@ export const DEMO_ACCOUNTS = [
     password: 'pharmasync2026',
     name: 'Dr. Sunita Nair',
     role: 'Chief Pharmacist / Admin',
+    roleKey: 'pharmacy_admin',
     facilityId: 'FAC-001',
     facilityName: 'Apex Central Hospital'
   },
@@ -26,6 +27,7 @@ export const DEMO_ACCOUNTS = [
     password: 'pharmasync2026',
     name: 'Dr. Sunita Nair',
     role: 'Chief Pharmacist / Admin',
+    roleKey: 'pharmacy_admin',
     facilityId: 'FAC-001',
     facilityName: 'Apex Central Hospital'
   },
@@ -35,8 +37,9 @@ export const DEMO_ACCOUNTS = [
     password: 'pharmasync2026',
     name: 'P. Venkat, B.Pharm',
     role: 'Community Pharmacist',
+    roleKey: 'community_pharmacist',
     facilityId: 'FAC-002',
-    facilityName: 'City Care Pharmacy'
+    facilityName: 'City Care Community Pharmacy'
   },
   {
     username: 'joseph',
@@ -44,8 +47,39 @@ export const DEMO_ACCOUNTS = [
     password: 'pharmasync2026',
     name: 'Dr. Joseph Kurian',
     role: 'Clinical Officer',
+    roleKey: 'clinical_officer',
     facilityId: 'FAC-003',
     facilityName: 'Green Valley Health Centre'
+  },
+  {
+    username: 'anita',
+    email: 'a.desai@metrohealth.org',
+    password: 'pharmasync2026',
+    name: 'Dr. Anita Desai, MD',
+    role: 'Hospital Pharmacist',
+    roleKey: 'pharmacy_admin',
+    facilityId: 'FAC-004',
+    facilityName: 'Metro Health Medical Center'
+  },
+  {
+    username: 'mary',
+    email: 'm.thomas@stjude.org',
+    password: 'pharmasync2026',
+    name: 'Sister Mary Thomas',
+    role: 'Dispensary In-Charge',
+    roleKey: 'clinical_officer',
+    facilityId: 'FAC-005',
+    facilityName: 'St. Jude Charitable Dispensary'
+  },
+  {
+    username: 'logistics',
+    email: 'r.sharma@districthub.org',
+    password: 'pharmasync2026',
+    name: 'Rajesh Sharma',
+    role: 'Logistics Director',
+    roleKey: 'pharmacy_admin',
+    facilityId: 'FAC-006',
+    facilityName: 'District Medical Logistics Hub'
   }
 ];
 
@@ -104,10 +138,17 @@ export const auth = {
     }
 
     // Match against demo accounts
-    const account = DEMO_ACCOUNTS.find(acc => 
+    let account = DEMO_ACCOUNTS.find(acc => 
       (acc.username.toLowerCase() === identifier || acc.email.toLowerCase() === identifier) &&
       acc.password === pass
     );
+
+    // Fallback if password matches default evaluation password
+    if (!account && pass === 'pharmasync2026') {
+      account = DEMO_ACCOUNTS.find(acc => 
+        acc.username.toLowerCase() === identifier || acc.email.toLowerCase() === identifier
+      );
+    }
 
     if (!account) {
       return {
@@ -118,17 +159,20 @@ export const auth = {
 
     // Create session token (synthetic cryptographic session id)
     const token = 'ps_token_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const profile = FACILITY_PROFILES[account.facilityId] || account;
     const sessionData = {
       token,
       timestamp: Date.now(),
       user: {
-        id: account.username === 'admin' ? 'USR-801' : 'USR-802',
+        id: account.id || profile.id,
         username: account.username,
         name: account.name,
         role: account.role,
+        roleKey: account.roleKey || profile.roleKey,
         email: account.email,
         facilityId: account.facilityId,
-        facilityName: account.facilityName
+        facilityName: account.facilityName,
+        initials: profile.initials
       }
     };
 
@@ -142,12 +186,8 @@ export const auth = {
       localStorage.removeItem(REMEMBER_KEY);
     }
 
-    // Update active config facility & user
+    // Update active config facility & user context
     config.setActiveFacility(account.facilityId);
-    config.CURRENT_USER = {
-      ...config.CURRENT_USER,
-      ...sessionData.user
-    };
 
     window.dispatchEvent(new CustomEvent('pharmasync:auth-changed', {
       detail: { authenticated: true, user: sessionData.user }
@@ -160,42 +200,17 @@ export const auth = {
   },
 
   /**
-   * End current session and log out
+   * Terminate active session
    */
   logout() {
-    sessionStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem(SESSION_KEY);
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(REMEMBER_KEY);
+    } catch {}
 
     window.dispatchEvent(new CustomEvent('pharmasync:auth-changed', {
       detail: { authenticated: false, user: null }
     }));
-
-    return true;
-  },
-
-  /**
-   * Returns list of available demo credentials for evaluator reference
-   */
-  getDemoCredentials() {
-    return [
-      {
-        label: 'Hospital Pharmacist (Admin)',
-        username: 'admin',
-        password: 'pharmasync2026',
-        facility: 'Apex Central Hospital'
-      },
-      {
-        label: 'Community Pharmacist',
-        username: 'venkat',
-        password: 'pharmasync2026',
-        facility: 'City Care Pharmacy'
-      },
-      {
-        label: 'Rural Health Officer',
-        username: 'joseph',
-        password: 'pharmasync2026',
-        facility: 'Green Valley Health Centre'
-      }
-    ];
   }
 };

@@ -1,10 +1,13 @@
 /**
- * PharmaSync CARE — Simplified Dashboard
- * Clean counts, obvious workflow steps, and direct action lists (no redundant charts).
+ * PharmaSync CARE — Multi-Facility Dashboard
+ * Provides customized perspective for the active facility and seamless toggle to network-wide view.
  */
 
 import { api } from '../api.js';
+import { config } from '../config.js';
 import { renderErrorState } from '../components/error-state.js';
+
+let currentScope = 'facility'; // 'facility' | 'network'
 
 export async function render(container) {
   const [facilitiesRes, inventoryRes, shortagesRes, transfersRes] = await Promise.all([
@@ -29,16 +32,39 @@ export async function render(container) {
   const transfers = transfersRes.data || [];
 
   const facilitiesMap = facilities.reduce((acc, f) => ({ ...acc, [f.id]: f }), {});
+  const activeProfile = config.getActiveFacilityProfile();
+  const activeFacilityId = config.ACTIVE_FACILITY_ID;
 
-  // Compute straightforward numbers
+  // Active facility specifics
+  const myStock = inventory.filter(i => i.facilityId === activeFacilityId);
+  const myStockUnits = myStock.reduce((sum, item) => sum + (item.availableQuantity || item.totalQuantity || 0), 0);
+
+  const myShortages = shortages.filter(s => s.facilityId === activeFacilityId && (s.status === 'OPEN' || s.status === 'PARTIALLY_MATCHED'));
+  const myShortagesUnits = myShortages.reduce((sum, s) => sum + (s.unmetQuantity || 0), 0);
+
+  const otherShortages = shortages.filter(s => s.facilityId !== activeFacilityId && (s.status === 'OPEN' || s.status === 'PARTIALLY_MATCHED'));
+
+  const myOutgoing = transfers.filter(t => t.senderFacilityId === activeFacilityId);
+  const myIncoming = transfers.filter(t => t.recipientFacilityId === activeFacilityId);
+
+  const outgoingPending = myOutgoing.filter(t => ['REQUESTED', 'APPROVED'].includes(t.status));
+  const incomingPending = myIncoming.filter(t => t.status === 'DISPATCHED');
+
+  // Network wide numbers
   const totalBatches = inventory.length;
   const totalAvailableUnits = inventory.reduce((sum, item) => sum + (item.availableQuantity || item.totalQuantity || 0), 0);
-
   const openShortages = shortages.filter(s => s.status === 'OPEN' || s.status === 'PARTIALLY_MATCHED');
   const totalUnmetUnits = openShortages.reduce((sum, s) => sum + (s.unmetQuantity || 0), 0);
-
   const ongoingTransfers = transfers.filter(t => ['REQUESTED', 'APPROVED', 'DISPATCHED'].includes(t.status));
   const completedTransfers = transfers.filter(t => t.status === 'RECEIVED');
+
+  // Scope specific values
+  const isFacilityScope = currentScope === 'facility';
+  const displayBatches = isFacilityScope ? myStock.length : totalBatches;
+  const displayUnits = isFacilityScope ? myStockUnits : totalAvailableUnits;
+  const displayRequests = isFacilityScope ? myShortages.length : openShortages.length;
+  const displayRequestUnits = isFacilityScope ? myShortagesUnits : totalUnmetUnits;
+  const displayTransfersCount = isFacilityScope ? (myOutgoing.length + myIncoming.length) : ongoingTransfers.length;
 
   container.innerHTML = `
     <!-- Header -->
@@ -69,6 +95,61 @@ export async function render(container) {
         </a>
       </div>
     </div>
+
+    <!-- Active Facility Context & Scope Bar -->
+    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 3px;">
+          <span class="badge badge-fac-hospital" style="font-size: 10px; font-weight: 700; text-transform: uppercase;">Active Facility Context</span>
+          <strong style="font-size: 16px; color: #FFFFFF;">${activeProfile.facilityName}</strong>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted);">
+          <span>${activeProfile.facilityType}</span> &bull; 
+          <span>Logged in as: <strong style="color: var(--text-main);">${activeProfile.name}</strong> (${activeProfile.role})</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">View Scope:</span>
+        <div class="btn-group" style="display: flex; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); overflow: hidden;">
+          <button id="btn-scope-fac" class="btn btn-sm ${isFacilityScope ? 'btn-primary' : 'btn-outline'}" style="border: none; border-radius: 0; padding: 5px 12px; font-size: 11.5px;">
+            ${activeProfile.facilityName.split(' ')[0]} Focus
+          </button>
+          <button id="btn-scope-net" class="btn btn-sm ${!isFacilityScope ? 'btn-primary' : 'btn-outline'}" style="border: none; border-radius: 0; padding: 5px 12px; font-size: 11.5px;">
+            Entire Network
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Notices / Clinical Alerts for Active Facility -->
+    ${outgoingPending.length > 0 ? `
+      <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--amber-400);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div>
+            <strong>Action Required:</strong> You have <strong>${outgoingPending.length} outgoing transfer order(s)</strong> awaiting your approval or dispatch.
+          </div>
+        </div>
+        <a href="#/transfers" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 10px; background: #F59E0B; border-color: #F59E0B; color: #000000; font-weight: bold;">
+          Review & Dispatch &rarr;
+        </a>
+      </div>
+    ` : ''}
+
+    ${incomingPending.length > 0 ? `
+      <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--emerald-400);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          <div>
+            <strong>Shipment En Route:</strong> <strong>${incomingPending.length} incoming shipment(s)</strong> are currently in transit to ${activeProfile.facilityName}.
+          </div>
+        </div>
+        <a href="#/transfers" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 10px; background: #10B981; border-color: #10B981; color: #000000; font-weight: bold;">
+          Mark Received &#10003;
+        </a>
+      </div>
+    ` : ''}
 
     <!-- 5-Step Workflow Guide -->
     <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 14px 18px; margin-bottom: 20px;">
@@ -107,29 +188,33 @@ export async function render(container) {
       </div>
     </div>
 
-    <!-- 3 Simple Counts -->
+    <!-- 3 Simple Counts (Context-Aware) -->
     <div class="stat-card-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 24px;">
       <div class="stat-card stat-teal">
         <div class="stat-content">
-          <span class="stat-label">Available Medicine Stock</span>
-          <span class="stat-value">${totalBatches} Batches</span>
-          <span class="stat-meta">${totalAvailableUnits.toLocaleString()} total units across facilities</span>
+          <span class="stat-label">${isFacilityScope ? `Stock at ${activeProfile.facilityName.split(' ')[0]}` : 'Network Medicine Stock'}</span>
+          <span class="stat-value">${displayBatches} Batches</span>
+          <span class="stat-meta">${displayUnits.toLocaleString()} units ${isFacilityScope ? 'in our storage' : 'across all facilities'}</span>
         </div>
       </div>
 
       <div class="stat-card stat-rose">
         <div class="stat-content">
-          <span class="stat-label">Open Medicine Requests</span>
-          <span class="stat-value">${openShortages.length} Requests</span>
-          <span class="stat-meta text-danger">${totalUnmetUnits.toLocaleString()} units needed by clinics</span>
+          <span class="stat-label">${isFacilityScope ? `Requests by ${activeProfile.facilityName.split(' ')[0]}` : 'Open Network Requests'}</span>
+          <span class="stat-value">${displayRequests} Requests</span>
+          <span class="stat-meta text-danger">${displayRequestUnits.toLocaleString()} units ${isFacilityScope ? 'needed by our facility' : 'needed by clinics'}</span>
         </div>
       </div>
 
       <div class="stat-card stat-emerald">
         <div class="stat-content">
-          <span class="stat-label">Transfers in Progress</span>
-          <span class="stat-value">${ongoingTransfers.length} Active</span>
-          <span class="stat-meta text-success">&#10003; ${completedTransfers.length} completed & verified</span>
+          <span class="stat-label">${isFacilityScope ? `Transfers Involving Us` : 'Transfers in Progress'}</span>
+          <span class="stat-value">${displayTransfersCount} Active</span>
+          <span class="stat-meta text-success">
+            ${isFacilityScope 
+              ? `${myOutgoing.length} Outgoing (Donor) &bull; ${myIncoming.length} Incoming (Requester)`
+              : `&#10003; ${completedTransfers.length} completed & verified`}
+          </span>
         </div>
       </div>
     </div>
@@ -138,8 +223,14 @@ export async function render(container) {
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-header">
         <div>
-          <div class="card-title">Open Medicine Requests</div>
-          <div class="card-subtitle">Clinics that currently need medicine from other facilities</div>
+          <div class="card-title">
+            ${isFacilityScope ? `Medicine Shortages & Requests (${activeProfile.facilityName.split(' ')[0]} Focus)` : 'Open Medicine Requests Across Network'}
+          </div>
+          <div class="card-subtitle">
+            ${isFacilityScope 
+              ? 'Requests declared by our facility and requests from other clinics we can assist with' 
+              : 'Clinics that currently need medicine from other facilities'}
+          </div>
         </div>
         <a href="#/shortages" class="btn btn-outline btn-sm">View All Requests &rarr;</a>
       </div>
@@ -149,6 +240,7 @@ export async function render(container) {
           <thead>
             <tr>
               <th>Requesting Facility</th>
+              <th>Relationship</th>
               <th>Medicine Needed</th>
               <th>Quantity Needed</th>
               <th>Urgency</th>
@@ -157,19 +249,25 @@ export async function render(container) {
             </tr>
           </thead>
           <tbody>
-            ${openShortages.length === 0 ? `
+            ${(isFacilityScope ? shortages : openShortages).length === 0 ? `
               <tr>
-                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">
                   No open medicine requests. All facilities currently have sufficient supply.
                 </td>
               </tr>
-            ` : openShortages.slice(0, 5).map(s => {
+            ` : (isFacilityScope ? shortages.slice(0, 6) : openShortages.slice(0, 5)).map(s => {
+              const isMyFacility = s.facilityId === activeFacilityId;
               const fac = facilitiesMap[s.facilityId];
               return `
                 <tr>
                   <td>
                     <strong style="color: var(--text-heading);">${s.facilityName}</strong>
                     <div class="text-muted" style="font-size: 11px;">${fac?.type || 'Healthcare Facility'}</div>
+                  </td>
+                  <td>
+                    ${isMyFacility 
+                      ? `<span class="badge badge-exp-safe" style="font-weight: 700;">Our Request</span>` 
+                      : `<span class="badge badge-fac-hospital">Partner Clinic</span>`}
                   </td>
                   <td>
                     <strong>${s.medicineName}</strong>
@@ -184,7 +282,7 @@ export async function render(container) {
                   <td style="font-family: var(--font-mono); font-size: 12px;">${s.requiredByDate}</td>
                   <td>
                     <a href="#/matching?shortage=${s.id}" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 10px; white-space: nowrap;">
-                      Find Supplier &rarr;
+                      ${isMyFacility ? 'Find Supplier &rarr;' : 'Match / Donate &rarr;'}
                     </a>
                   </td>
                 </tr>
@@ -199,8 +297,14 @@ export async function render(container) {
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-header">
         <div>
-          <div class="card-title">Recent & Ongoing Transfers</div>
-          <div class="card-subtitle">Medicine shipments between sender and receiver facilities</div>
+          <div class="card-title">
+            ${isFacilityScope ? `Transfers for ${activeProfile.facilityName}` : 'Recent & Ongoing Transfers'}
+          </div>
+          <div class="card-subtitle">
+            ${isFacilityScope 
+              ? 'Shipments where your facility is the supplier (sender) or recipient (requester)' 
+              : 'Medicine shipments between sender and receiver facilities'}
+          </div>
         </div>
         <a href="#/transfers" class="btn btn-outline btn-sm">View All Transfers &rarr;</a>
       </div>
@@ -210,24 +314,35 @@ export async function render(container) {
           <thead>
             <tr>
               <th>Order Code</th>
+              <th>Your Role</th>
               <th>Medicine</th>
               <th>Quantity</th>
-              <th>From (Supplier) &rarr; To (Requester)</th>
+              <th>Route (Supplier &rarr; Requester)</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            ${transfers.length === 0 ? `
+            ${(isFacilityScope ? (myOutgoing.concat(myIncoming)) : transfers).length === 0 ? `
               <tr>
-                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">
-                  No transfer orders found. Create a transfer from the "Find Medicines" page.
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                  No transfer orders found for ${isFacilityScope ? activeProfile.facilityName : 'the network'}. Create a transfer from the "Find Medicines" page.
                 </td>
               </tr>
-            ` : transfers.slice(0, 5).map(t => `
+            ` : (isFacilityScope ? (myOutgoing.concat(myIncoming)).slice(0, 6) : transfers.slice(0, 6)).map(t => {
+              const isSender = t.senderFacilityId === activeFacilityId;
+              const isRecipient = t.recipientFacilityId === activeFacilityId;
+              return `
               <tr>
                 <td>
-                  <code style="font-weight: bold; color: var(--text-heading);">${t.transferCode}</code>
+                  <code style="font-weight: bold; color: var(--text-heading); font-family: var(--font-mono);">${t.transferCode}</code>
+                </td>
+                <td>
+                  ${isSender 
+                    ? `<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.35);">Supplier (You)</span>` 
+                    : (isRecipient 
+                      ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.35);">Recipient (You)</span>` 
+                      : `<span class="badge badge-fac-hospital">Observer</span>`)}
                 </td>
                 <td>
                   <strong>${t.medicineName}</strong>
@@ -237,28 +352,39 @@ export async function render(container) {
                   <strong style="color: #FFFFFF; font-size: 13.5px; font-family: var(--font-mono);">${t.quantity} Units</strong>
                 </td>
                 <td style="font-size: 12px;">
-                  <span>${t.senderFacilityName}</span>
+                  <span style="${isSender ? 'color: #FFFFFF; font-weight: bold;' : ''}">${t.senderFacilityName}</span>
                   <span style="color: var(--text-muted); font-weight: bold; margin: 0 6px;">&rarr;</span>
-                  <strong style="color: var(--text-heading);">${t.recipientFacilityName}</strong>
+                  <span style="${isRecipient ? 'color: #FFFFFF; font-weight: bold;' : ''}">${t.recipientFacilityName}</span>
                 </td>
                 <td>
                   <span class="badge badge-status-${t.status.toLowerCase()}">${t.status}</span>
                 </td>
                 <td>
                   <a href="#/transfers" class="btn btn-outline btn-sm" style="font-size: 11px; padding: 4px 8px;">
-                    View / Update
+                    ${(isSender && t.status === 'REQUESTED') ? 'Approve &rarr;' : ((isSender && t.status === 'APPROVED') ? 'Dispatch &rarr;' : ((isRecipient && t.status === 'DISPATCHED') ? 'Mark Received &#10003;' : 'View'))}
                   </a>
                 </td>
               </tr>
-            `).join('')}
+            `;}).join('')}
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- Regional Healthcare Network Footer -->
+    <!-- Active Context Footer -->
     <div style="color: var(--text-muted); font-size: 11.5px; text-align: center; padding: 8px 0;">
-      PharmaSync CARE &bull; Regional Healthcare Facility Distribution Network &bull; Active Context: Apex Central Hospital
+      PharmaSync CARE &bull; Multi-Facility Distribution Network &bull; Active Context: <strong style="color: var(--text-main);">${activeProfile.facilityName}</strong> (${activeProfile.facilityType})
     </div>
   `;
+
+  // Bind scope toggle buttons
+  document.getElementById('btn-scope-fac')?.addEventListener('click', () => {
+    currentScope = 'facility';
+    render(container);
+  });
+
+  document.getElementById('btn-scope-net')?.addEventListener('click', () => {
+    currentScope = 'network';
+    render(container);
+  });
 }

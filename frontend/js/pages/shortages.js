@@ -4,6 +4,7 @@
  */
 
 import { api } from '../api.js';
+import { config } from '../config.js';
 import { renderErrorState } from '../components/error-state.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -12,6 +13,7 @@ import { exportToCSV } from '../components/export-csv.js';
 let shortagesList = [];
 let facilitiesList = [];
 let facilitiesMap = {};
+let shortagesTab = 'all'; // 'mine' | 'others' | 'all'
 
 export async function render(container) {
   const [shortagesRes, facRes] = await Promise.all([
@@ -31,6 +33,11 @@ export async function render(container) {
   shortagesList = shortagesRes.data || [];
   facilitiesList = facRes.data || [];
   facilitiesMap = facilitiesList.reduce((acc, f) => ({ ...acc, [f.id]: f }), {});
+
+  const activeFacilityId = config.ACTIVE_FACILITY_ID;
+  const activeProfile = config.getActiveFacilityProfile();
+  const myShortages = shortagesList.filter(s => s.facilityId === activeFacilityId);
+  const otherShortages = shortagesList.filter(s => s.facilityId !== activeFacilityId);
 
   container.innerHTML = `
     <div class="page-header">
@@ -55,6 +62,19 @@ export async function render(container) {
           + Create Medicine Request
         </button>
       </div>
+    </div>
+
+    <!-- Active Facility Filter Tabs -->
+    <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+      <button class="btn btn-sm ${shortagesTab === 'mine' ? 'btn-primary' : 'btn-outline'}" id="tab-sht-mine">
+        Requests by ${activeProfile.facilityName.split(' ')[0]} (Our Shortages: ${myShortages.length})
+      </button>
+      <button class="btn btn-sm ${shortagesTab === 'others' ? 'btn-primary' : 'btn-outline'}" id="tab-sht-others">
+        Requests from Other Clinics (${otherShortages.length})
+      </button>
+      <button class="btn btn-sm ${shortagesTab === 'all' ? 'btn-primary' : 'btn-outline'}" id="tab-sht-all">
+        All Network Requests (${shortagesList.length})
+      </button>
     </div>
 
     <!-- Search & Filter Bar -->
@@ -113,11 +133,19 @@ function renderTableRows() {
   const tbody = document.getElementById('shortages-table-body');
   if (!tbody) return;
 
+  const activeFacilityId = config.ACTIVE_FACILITY_ID;
   const q = (document.getElementById('sht-search')?.value || '').toLowerCase().trim();
   const urgencyVal = document.getElementById('sht-filter-urgency')?.value || 'ALL';
   const statusVal = document.getElementById('sht-filter-status')?.value || 'ALL';
 
-  const filtered = shortagesList.filter(s => {
+  let list = [...shortagesList];
+  if (shortagesTab === 'mine') {
+    list = list.filter(s => s.facilityId === activeFacilityId);
+  } else if (shortagesTab === 'others') {
+    list = list.filter(s => s.facilityId !== activeFacilityId);
+  }
+
+  const filtered = list.filter(s => {
     const matchQ = !q ||
       s.id.toLowerCase().includes(q) ||
       s.medicineName.toLowerCase().includes(q) ||
@@ -130,12 +158,16 @@ function renderTableRows() {
   });
 
   if (filtered.length === 0) {
+    const emptyMsg = shortagesTab === 'mine'
+      ? `Our facility has no open medicine requests logged at this time.`
+      : `No medicine requests match your criteria.`;
+
     tbody.innerHTML = `
       <tr>
         <td colspan="8">
           <div class="empty-state">
-            <div class="empty-state-title">No medicine requests match your criteria</div>
-            <div class="empty-state-desc">Try clearing your search terms or filters.</div>
+            <div class="empty-state-title">No medicine requests found</div>
+            <div class="empty-state-desc">${emptyMsg}</div>
           </div>
         </td>
       </tr>
@@ -144,6 +176,7 @@ function renderTableRows() {
   }
 
   tbody.innerHTML = filtered.map(s => {
+    const isMyFacility = s.facilityId === activeFacilityId;
     const fac = facilitiesMap[s.facilityId];
     const facType = fac?.type || 'Healthcare Facility';
 
@@ -162,40 +195,32 @@ function renderTableRows() {
     return `
       <tr>
         <td>
-          <code style="font-family: var(--font-mono); font-weight: bold; color: var(--text-heading);">${s.id}</code>
+          <code style="font-weight: bold; color: var(--text-heading); font-family: var(--font-mono);">${s.id}</code>
         </td>
         <td>
-          <strong style="color: var(--text-heading); font-size: 13.5px;">${s.facilityName}</strong>
+          <strong style="${isMyFacility ? 'color: #FFFFFF;' : ''}">${s.facilityName}</strong>
+          ${isMyFacility ? '<span class="badge badge-exp-safe" style="margin-left: 6px; font-size: 10px;">Our Facility</span>' : ''}
           <div class="text-muted" style="font-size: 11px;">${facType}</div>
         </td>
         <td>
-          <strong style="color: var(--text-heading);">${s.medicineName}</strong>
-          <div class="text-muted" style="font-size: 11.5px;">${s.strength} &bull; ${s.dosageForm}</div>
-          ${s.reason ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 2px; font-style: italic;">&ldquo;${s.reason}&rdquo;</div>` : ''}
+          <strong style="color: var(--text-heading); font-size: 13.5px;">${s.medicineName}</strong>
+          <div class="text-muted" style="font-size: 11px;">${s.strength} &bull; ${s.dosageForm}</div>
         </td>
         <td>
-          <strong style="color: ${s.unmetQuantity > 0 ? 'var(--rose-400)' : 'var(--emerald-400)'}; font-size: 14.5px;">
-            ${s.unmetQuantity}
-          </strong>
-          <span class="text-muted" style="font-size: 11px;"> of ${s.requiredQuantity} units</span>
+          <strong style="color: var(--rose-400); font-size: 14.5px; font-family: var(--font-mono);">${s.unmetQuantity}</strong>
+          <span class="text-muted" style="font-size: 11px;"> / ${s.requiredQuantity} units</span>
         </td>
         <td>
           <span class="badge badge-urgency-${s.urgency.toLowerCase()}">${s.urgency}</span>
         </td>
-        <td style="font-family: var(--font-mono); font-size: 12px;">
-          ${s.requiredByDate}
-        </td>
+        <td style="font-family: var(--font-mono); font-size: 12px;">${s.requiredByDate}</td>
         <td>
           <span class="badge ${statusBadgeClass}">${statusLabel}</span>
         </td>
         <td>
-          ${s.unmetQuantity > 0 ? `
-            <a href="#/matching?shortage=${s.id}" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 10px; white-space: nowrap;">
-              Find Supplier &rarr;
-            </a>
-          ` : `
-            <span class="badge badge-exp-safe">Fulfilled</span>
-          `}
+          <a href="#/matching?shortage=${s.id}" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 10px; white-space: nowrap;">
+            ${isMyFacility ? 'Find Supplier &rarr;' : 'Match & Fulfill &rarr;'}
+          </a>
         </td>
       </tr>
     `;
@@ -207,32 +232,65 @@ function setupEvents() {
   document.getElementById('sht-filter-urgency')?.addEventListener('change', renderTableRows);
   document.getElementById('sht-filter-status')?.addEventListener('change', renderTableRows);
 
+  document.getElementById('tab-sht-mine')?.addEventListener('click', () => {
+    shortagesTab = 'mine';
+    updateShtTabs();
+    renderTableRows();
+  });
+
+  document.getElementById('tab-sht-others')?.addEventListener('click', () => {
+    shortagesTab = 'others';
+    updateShtTabs();
+    renderTableRows();
+  });
+
+  document.getElementById('tab-sht-all')?.addEventListener('click', () => {
+    shortagesTab = 'all';
+    updateShtTabs();
+    renderTableRows();
+  });
+
   document.getElementById('btn-create-request')?.addEventListener('click', openCreateRequestModal);
 
   document.getElementById('btn-export-shortages')?.addEventListener('click', () => {
     exportToCSV('PharmaSync_Medicine_Requests', shortagesList.map(s => ({
       RequestID: s.id,
-      RequestingFacility: s.facilityName,
+      FacilityName: s.facilityName,
       MedicineName: s.medicineName,
       Strength: s.strength,
-      QuantityNeeded: s.unmetQuantity,
-      TotalRequested: s.requiredQuantity,
+      DosageForm: s.dosageForm,
+      RequiredQuantity: s.requiredQuantity,
+      UnmetQuantity: s.unmetQuantity,
       Urgency: s.urgency,
-      NeededByDate: s.requiredByDate,
-      Status: s.status,
-      Reason: s.reason || ''
+      RequiredByDate: s.requiredByDate,
+      Status: s.status
     })));
     toast.success('Export Complete', 'Medicine requests exported in CSV format.');
   });
 }
 
+function updateShtTabs() {
+  ['mine', 'others', 'all'].forEach(t => {
+    const btn = document.getElementById(`tab-sht-${t}`);
+    if (btn) {
+      if (shortagesTab === t) {
+        btn.className = 'btn btn-sm btn-primary';
+      } else {
+        btn.className = 'btn btn-sm btn-outline';
+      }
+    }
+  });
+}
+
 function openCreateRequestModal() {
+  const activeFacilityId = config.ACTIVE_FACILITY_ID;
+
   const content = `
     <form id="form-create-request" onsubmit="return false;">
       <div class="form-group">
         <label class="form-label" for="req-modal-facility">Which facility needs medicine? <span class="required-pill">Required</span></label>
         <select id="req-modal-facility" class="form-select">
-          ${facilitiesList.map(f => `<option value="${f.id}">${f.name} (${f.type})</option>`).join('')}
+          ${facilitiesList.map(f => `<option value="${f.id}" ${f.id === activeFacilityId ? 'selected' : ''}>${f.name} (${f.type})</option>`).join('')}
         </select>
         <span class="form-help">Select the hospital or clinic currently facing the shortage</span>
       </div>

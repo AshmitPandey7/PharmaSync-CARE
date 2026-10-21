@@ -4,6 +4,7 @@
  */
 
 import { api } from '../api.js';
+import { config } from '../config.js';
 import { renderErrorState } from '../components/error-state.js';
 import { modal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -12,6 +13,7 @@ import { exportToCSV } from '../components/export-csv.js';
 let inventoryList = [];
 let facilitiesList = [];
 let facilitiesMap = {};
+let inventoryTab = 'my-facility'; // 'my-facility' | 'all'
 
 export async function render(container) {
   const [invRes, facRes] = await Promise.all([
@@ -31,6 +33,10 @@ export async function render(container) {
   inventoryList = invRes.data || [];
   facilitiesList = facRes.data || [];
   facilitiesMap = facilitiesList.reduce((acc, f) => ({ ...acc, [f.id]: f }), {});
+
+  const activeFacilityId = config.ACTIVE_FACILITY_ID;
+  const activeProfile = config.getActiveFacilityProfile();
+  const myBatches = inventoryList.filter(b => b.facilityId === activeFacilityId);
 
   container.innerHTML = `
     <div class="page-header">
@@ -54,6 +60,16 @@ export async function render(container) {
           + Add Medicine Batch
         </button>
       </div>
+    </div>
+
+    <!-- Active Facility Filter Tabs -->
+    <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+      <button class="btn btn-sm ${inventoryTab === 'my-facility' ? 'btn-primary' : 'btn-outline'}" id="tab-inv-mine">
+        Stock at ${activeProfile.facilityName.split(' ')[0]} (${myBatches.length} Batches)
+      </button>
+      <button class="btn btn-sm ${inventoryTab === 'all' ? 'btn-primary' : 'btn-outline'}" id="tab-inv-all">
+        All Network Facilities (${inventoryList.length} Batches)
+      </button>
     </div>
 
     <!-- Search & Filter Bar -->
@@ -108,13 +124,19 @@ function renderTableRows() {
   const tbody = document.getElementById('inventory-table-body');
   if (!tbody) return;
 
+  const activeFacilityId = config.ACTIVE_FACILITY_ID;
   const q = (document.getElementById('inv-search')?.value || '').toLowerCase().trim();
   const facVal = document.getElementById('inv-filter-facility')?.value || 'ALL';
   const expVal = document.getElementById('inv-filter-expiry')?.value || 'ALL';
 
   const today = new Date();
 
-  const filtered = inventoryList.filter(item => {
+  let list = [...inventoryList];
+  if (inventoryTab === 'my-facility') {
+    list = list.filter(item => item.facilityId === activeFacilityId);
+  }
+
+  const filtered = list.filter(item => {
     const matchQ = !q ||
       item.medicineName.toLowerCase().includes(q) ||
       (item.genericName && item.genericName.toLowerCase().includes(q)) ||
@@ -133,12 +155,16 @@ function renderTableRows() {
   });
 
   if (filtered.length === 0) {
+    const emptyMsg = inventoryTab === 'my-facility'
+      ? `No medicine batches currently registered for this facility. Click "+ Add Medicine Batch" to record stock.`
+      : `No medicine batches match your search criteria.`;
+
     tbody.innerHTML = `
       <tr>
         <td colspan="7">
           <div class="empty-state">
-            <div class="empty-state-title">No medicine batches match your search</div>
-            <div class="empty-state-desc">Try clearing the search query or changing filters.</div>
+            <div class="empty-state-title">No medicine batches found</div>
+            <div class="empty-state-desc">${emptyMsg}</div>
           </div>
         </td>
       </tr>
@@ -177,16 +203,11 @@ function renderTableRows() {
           <strong style="font-size: 14.5px; color: #FFFFFF; font-family: var(--font-mono);">${availableQty}</strong>
           <span class="text-muted" style="font-size: 11px;"> units</span>
         </td>
-        <td style="font-family: var(--font-mono); font-size: 12px;">
-          ${item.expiryDate}
-        </td>
+        <td style="font-family: var(--font-mono); font-size: 12px;">${item.expiryDate}</td>
+        <td>${expiryBadge}</td>
         <td>
-          ${expiryBadge}
-        </td>
-        <td>
-          <button class="btn btn-outline btn-sm btn-edit-batch" data-id="${item.id}" title="Edit batch stock quantity or expiry date">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            <span>Edit Stock</span>
+          <button class="btn btn-outline btn-sm btn-edit-batch" data-id="${item.id}" style="padding: 4px 8px; font-size: 11px;">
+            Edit Stock
           </button>
         </td>
       </tr>
@@ -195,8 +216,7 @@ function renderTableRows() {
 
   tbody.querySelectorAll('.btn-edit-batch').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const id = e.currentTarget.dataset.id;
-      const batch = inventoryList.find(b => b.id === id);
+      const batch = inventoryList.find(b => b.id === e.currentTarget.dataset.id);
       if (batch) openEditBatchModal(batch);
     });
   });
@@ -206,6 +226,18 @@ function setupEvents() {
   document.getElementById('inv-search')?.addEventListener('input', renderTableRows);
   document.getElementById('inv-filter-facility')?.addEventListener('change', renderTableRows);
   document.getElementById('inv-filter-expiry')?.addEventListener('change', renderTableRows);
+
+  document.getElementById('tab-inv-mine')?.addEventListener('click', () => {
+    inventoryTab = 'my-facility';
+    updateInvTabs();
+    renderTableRows();
+  });
+
+  document.getElementById('tab-inv-all')?.addEventListener('click', () => {
+    inventoryTab = 'all';
+    updateInvTabs();
+    renderTableRows();
+  });
 
   document.getElementById('btn-add-batch')?.addEventListener('click', openAddBatchModal);
 
@@ -224,13 +256,29 @@ function setupEvents() {
   });
 }
 
+function updateInvTabs() {
+  const mineBtn = document.getElementById('tab-inv-mine');
+  const allBtn = document.getElementById('tab-inv-all');
+  if (mineBtn && allBtn) {
+    if (inventoryTab === 'my-facility') {
+      mineBtn.className = 'btn btn-sm btn-primary';
+      allBtn.className = 'btn btn-sm btn-outline';
+    } else {
+      mineBtn.className = 'btn btn-sm btn-outline';
+      allBtn.className = 'btn btn-sm btn-primary';
+    }
+  }
+}
+
 function openAddBatchModal() {
+  const activeFacilityId = config.ACTIVE_FACILITY_ID;
+
   const content = `
     <form id="form-add-batch" onsubmit="return false;">
       <div class="form-group">
         <label class="form-label" for="modal-batch-fac">Healthcare Facility <span class="required-pill">Required</span></label>
         <select id="modal-batch-fac" class="form-select">
-          ${facilitiesList.map(f => `<option value="${f.id}">${f.name} (${f.type})</option>`).join('')}
+          ${facilitiesList.map(f => `<option value="${f.id}" ${f.id === activeFacilityId ? 'selected' : ''}>${f.name} (${f.type})</option>`).join('')}
         </select>
         <span class="form-help">Select the pharmacy or hospital location holding this medicine</span>
       </div>
