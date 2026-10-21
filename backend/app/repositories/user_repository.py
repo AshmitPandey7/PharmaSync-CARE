@@ -6,6 +6,12 @@ Handles authentication credentials and profile information.
 from app.repositories.base_repository import BaseRepository
 from werkzeug.security import check_password_hash
 
+ROLE_PERMISSIONS = {
+    'pharmacy_admin': ['ADMIN_ACCESS', 'APPROVE_TRANSFER', 'MANAGE_STOCK', 'VIEW_AUDIT'],
+    'community_pharmacist': ['MANAGE_STOCK', 'CREATE_REQUEST', 'VERIFY_TRANSFER'],
+    'clinical_officer': ['CREATE_REQUEST', 'VIEW_STOCK', 'ACCEPT_TRANSFER'],
+}
+
 
 class UserRepository(BaseRepository):
 
@@ -15,15 +21,18 @@ class UserRepository(BaseRepository):
     def _format_user(self, doc):
         if not doc:
             return None
+        role_key = doc.get('roleKey') or doc.get('role_key', 'pharmacy_admin')
         return {
             "id": doc.get('id') or str(doc.get('_id')),
             "username": doc.get('username', ''),
             "email": doc.get('email', ''),
             "name": doc.get('name', ''),
             "role": doc.get('role', ''),
-            "roleKey": doc.get('roleKey') or doc.get('role_key', 'pharmacy_admin'),
+            "roleKey": role_key,
             "facilityId": doc.get('facilityId') or doc.get('facility_id'),
-            "facilityName": doc.get('facilityName') or doc.get('facility_name', '')
+            "facilityName": doc.get('facilityName') or doc.get('facility_name', ''),
+            "permissions": doc.get('permissions') or ROLE_PERMISSIONS.get(role_key, ['STANDARD_ACCESS', 'VERIFY_TRANSFER']),
+            "status": doc.get('status', 'Active')
         }
 
     def get_all(self):

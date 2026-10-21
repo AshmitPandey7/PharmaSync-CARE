@@ -137,22 +137,33 @@ export async function render(container) {
             </tr>
           </thead>
           <tbody>
-            ${usersList.map(u => `
+            ${usersList.map(u => {
+              const defaultPermissions = {
+                pharmacy_admin: ['ADMIN_ACCESS', 'APPROVE_TRANSFER', 'MANAGE_STOCK', 'VIEW_AUDIT'],
+                community_pharmacist: ['MANAGE_STOCK', 'CREATE_REQUEST', 'VERIFY_TRANSFER'],
+                clinical_officer: ['CREATE_REQUEST', 'VIEW_STOCK', 'ACCEPT_TRANSFER']
+              };
+              const perms = (Array.isArray(u.permissions) && u.permissions.length > 0)
+                ? u.permissions
+                : (defaultPermissions[u.roleKey] || ['STANDARD_ACCESS', 'VERIFY_TRANSFER']);
+              const status = u.status || 'Active';
+              const facilityDisplay = u.facilityName || u.facilityId || 'All Facilities';
+              return `
               <tr>
-                <td><strong style="color: var(--text-heading);">${u.name}</strong></td>
-                <td><code style="font-size: 11.5px; font-family: var(--font-mono);">${u.email}</code></td>
-                <td>${u.facilityId}</td>
-                <td><span class="badge badge-fac-hospital">${u.role}</span></td>
+                <td><strong style="color: var(--text-heading);">${u.name || u.username || 'User'}</strong></td>
+                <td><code style="font-size: 11.5px; font-family: var(--font-mono);">${u.email || '—'}</code></td>
+                <td>${facilityDisplay}</td>
+                <td><span class="badge badge-fac-hospital">${u.role || 'Staff'}</span></td>
                 <td>
                   <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                    ${u.permissions.map(p => `
+                    ${perms.map(p => `
                       <span class="badge" style="background: var(--navy-800); color: var(--slate-300); font-size: 10px; font-family: var(--font-mono);">${p}</span>
                     `).join('')}
                   </div>
                 </td>
-                <td><span class="badge badge-exp-safe">${u.status}</span></td>
+                <td><span class="badge badge-exp-safe">${status}</span></td>
               </tr>
-            `).join('')}
+            `;}).join('')}
           </tbody>
         </table>
       </div>
@@ -200,19 +211,23 @@ function renderAuditLogs() {
   if (!tbody) return;
 
   const q = (document.getElementById('admin-search-logs')?.value || '').toLowerCase().trim();
-  const filtered = auditLogs.filter(l =>
-    !q || l.user.toLowerCase().includes(q) || l.action.toLowerCase().includes(q) || l.entity.toLowerCase().includes(q) || l.details.toLowerCase().includes(q)
+  const filtered = (auditLogs || []).filter(l =>
+    !q ||
+    (l.user || '').toLowerCase().includes(q) ||
+    (l.action || '').toLowerCase().includes(q) ||
+    (l.entity || '').toLowerCase().includes(q) ||
+    (l.details || '').toLowerCase().includes(q)
   );
 
   tbody.innerHTML = filtered.map(l => `
     <tr>
-      <td style="font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; color: var(--text-muted);">${l.timestamp}</td>
-      <td><strong style="color: var(--text-heading);">${l.user}</strong></td>
-      <td style="font-size: 11.5px;" class="text-muted">${l.role}</td>
-      <td><code class="audit-badge" style="color: #FFFFFF; font-weight: var(--font-semibold); background: #202020; border: 1px solid #303030; padding: 2px 6px; border-radius: 3px;">${l.action}</code></td>
-      <td><span style="font-size: 12px; font-weight: var(--font-medium);">${l.entity}</span></td>
-      <td style="font-size: 12px; color: var(--text-main);">${l.details}</td>
-      <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">${l.ipAddress}</td>
+      <td style="font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; color: var(--text-muted);">${l.timestamp || '—'}</td>
+      <td><strong style="color: var(--text-heading);">${l.user || 'System'}</strong></td>
+      <td style="font-size: 11.5px;" class="text-muted">${l.role || 'System'}</td>
+      <td><code class="audit-badge" style="color: #FFFFFF; font-weight: var(--font-semibold); background: #202020; border: 1px solid #303030; padding: 2px 6px; border-radius: 3px;">${l.action || 'EVENT'}</code></td>
+      <td><span style="font-size: 12px; font-weight: var(--font-medium);">${l.entity || '—'}</span></td>
+      <td style="font-size: 12px; color: var(--text-main);">${l.details || '—'}</td>
+      <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">${l.ipAddress || '127.0.0.1'}</td>
     </tr>
   `).join('');
 }
