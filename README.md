@@ -1,7 +1,6 @@
 # PharmaSync CARE — Frontend Application
 
 > **Intelligent, Predictive, Explainable Medicine Redistribution Network**  
-> *A 2nd-Year B.Tech CSE Database Management Systems (DBMS) College Project Prototype*
 
 ---
 
