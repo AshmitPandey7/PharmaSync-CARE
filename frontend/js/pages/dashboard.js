@@ -9,7 +9,6 @@
 import { api } from '../api.js';
 import { config } from '../config.js';
 import { renderErrorState } from '../components/error-state.js';
-import { guidedDemo } from '../components/guided-demo.js';
 import { demoInfoModal } from '../components/demo-info-modal.js';
 
 let currentScope = 'facility'; // 'facility' | 'network'
@@ -93,40 +92,13 @@ export async function render(container) {
       </div>
 
       <div class="page-header-actions">
-        ${isDemo ? `
-          <button class="btn btn-primary btn-sm" id="btn-hero-guided-demo">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-            Start Guided Demo
-          </button>
-        ` : ''}
         <a href="#/inventory" class="btn btn-secondary btn-sm">+ Add Stock</a>
         <a href="#/shortages" class="btn btn-secondary btn-sm">+ Request Medicine</a>
-        <a href="#/matching" class="btn btn-outline btn-sm">Find Medicines &rarr;</a>
+        <a href="#/matching" class="btn btn-primary btn-sm">Find Medicines &rarr;</a>
       </div>
     </div>
 
-    <!-- Guided Demo Banner (Visible in Demo Mode) -->
-    ${isDemo ? `
-      <div class="demo-banner">
-        <div class="demo-banner-content">
-          <div class="demo-banner-badge">DEMO PRESENTATION MODE</div>
-          <div class="demo-banner-title">Demonstrating PharmaSync CARE for DBMS Evaluation?</div>
-          <div class="demo-banner-desc">
-            Use the interactive guided assistant for step-by-step talking points on inventory tracking, multi-criteria matching, and transaction logs.
-          </div>
-        </div>
-        <div class="demo-banner-actions">
-          <button type="button" class="btn btn-primary btn-sm" id="btn-banner-launch-walkthrough">
-            Launch Walkthrough &rarr;
-          </button>
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-banner-demo-info">
-            Data Architecture Info
-          </button>
-        </div>
-      </div>
-    ` : ''}
+
 
     <!-- Active Facility Context Bar & View Scope -->
     <div class="context-bar">
@@ -411,16 +383,5 @@ export async function render(container) {
     render(container);
   });
 
-  // Bind Guided Demo Launches
-  document.getElementById('btn-hero-guided-demo')?.addEventListener('click', () => {
-    guidedDemo.start();
-  });
 
-  document.getElementById('btn-banner-launch-walkthrough')?.addEventListener('click', () => {
-    guidedDemo.start();
-  });
-
-  document.getElementById('btn-banner-demo-info')?.addEventListener('click', () => {
-    demoInfoModal.open();
-  });
 }

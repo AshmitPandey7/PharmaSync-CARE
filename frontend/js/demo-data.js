@@ -1,7 +1,7 @@
 /**
  * PharmaSync CARE — Synthetic Demonstration Dataset (India Healthcare Network)
  * Realistic, connected healthcare inventory, facilities, shortages, and transfer logs.
- * Tailored for academic DBMS project demonstration and viva evaluation.
+ * Standard multi-facility healthcare network dataset for clinical redistribution simulation.
  * All records are strictly synthetic and non-clinical.
  */
 

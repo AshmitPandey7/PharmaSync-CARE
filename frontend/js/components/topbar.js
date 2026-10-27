@@ -9,7 +9,6 @@ import { api } from '../api.js';
 import { auth } from '../auth.js';
 import { sidebar } from './sidebar.js';
 import { toast } from './toast.js';
-import { guidedDemo } from './guided-demo.js';
 import { demoInfoModal } from './demo-info-modal.js';
 
 export const topbar = {
@@ -37,15 +36,7 @@ export const topbar = {
       </div>
 
       <div class="topbar-right">
-        <!-- Guided Demo Quick Button (Available in Demo Mode) -->
-        ${isDemo ? `
-          <button class="btn btn-secondary btn-sm guided-demo-pill" id="btn-topbar-guided-demo" title="Start Step-by-Step Guided Demo for Professor Presentation">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-            <span>Start Guided Demo</span>
-          </button>
-        ` : ''}
+
 
         <!-- Demo / Live Mode Toggle Control -->
         <div class="mode-toggle-control" id="mode-toggle-pill" title="Toggle between synthetic Demo Mode and Live Flask Database Mode">
@@ -54,19 +45,19 @@ export const topbar = {
           <button class="mode-switch-btn" id="mode-switch-btn">${isDemo ? 'Switch Live' : 'Switch Demo'}</button>
         </div>
 
-        <!-- Demo Data Info Button (Viva Technical Details) -->
-        <button class="btn btn-outline btn-sm btn-icon-text" id="btn-demo-info" title="View Demo Data Architecture & DBMS Viva Defense Details">
+        <!-- System Architecture Specifications -->
+        <button class="btn btn-outline btn-sm btn-icon-text" id="btn-demo-info" title="System Architecture & Data Specifications">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <line x1="12" y1="16" x2="12" y2="12"/>
             <line x1="12" y1="8" x2="12.01" y2="8"/>
           </svg>
-          <span style="font-size: 11px;">Data Info</span>
+          <span style="font-size: 11px;">System Specs</span>
         </button>
 
         <!-- Reset Demo Data (Visible strictly in Demo Mode) -->
         ${isDemo ? `
-          <button class="btn btn-outline btn-sm btn-icon-text" id="btn-quick-reset" title="Reset Demo Data to Initial Indian Healthcare Scenario">
+          <button class="btn btn-outline btn-sm btn-icon-text" id="btn-quick-reset" title="Reset demonstration dataset to initial baseline state">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
               <path d="M3 3v5h5"/>
@@ -116,10 +107,7 @@ export const topbar = {
       });
     }
 
-    // 2. Guided Demo Button
-    document.getElementById('btn-topbar-guided-demo')?.addEventListener('click', () => {
-      guidedDemo.start();
-    });
+
 
     // 3. Demo Data Info Button
     document.getElementById('btn-demo-info')?.addEventListener('click', () => {

@@ -126,7 +126,7 @@ export const sidebar = {
           </ul>
         </div>
 
-        <!-- System & Viva Info -->
+        <!-- System Configuration -->
         <div style="margin-top: 18px;">
           <div class="nav-group-title">System &amp; Settings</div>
           <ul class="nav-list">

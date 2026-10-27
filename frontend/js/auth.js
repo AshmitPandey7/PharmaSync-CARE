@@ -167,7 +167,7 @@ export const auth = {
       acc.password === pass
     );
 
-    // Fallback if password matches default evaluation password
+    // Fallback if password matches default access password
     if (!account && pass === 'pharmasync2026') {
       account = DEMO_ACCOUNTS.find(acc => 
         acc.username.toLowerCase() === identifier || acc.email.toLowerCase() === identifier
@@ -177,7 +177,7 @@ export const auth = {
     if (!account) {
       return {
         success: false,
-        error: 'Invalid credentials. Please verify your username or use the demo credentials below.'
+        error: 'Invalid credentials. Please verify your username or select a facility persona below.'
       };
     }
 

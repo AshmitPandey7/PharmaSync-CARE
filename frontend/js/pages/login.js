@@ -1,7 +1,7 @@
 /**
  * PharmaSync CARE — Login Page Component
  * Dedicated monochrome authentication page with working password visibility toggle,
- * credential validation, evaluator quick-fill tools, and destination redirect.
+ * credential validation, facility quick-fill tools, and destination redirect.
  */
 
 import { auth } from '../auth.js';
@@ -119,7 +119,7 @@ export async function render(container) {
             </button>
           </form>
 
-          <!-- Evaluator Quick Demo Credentials Card -->
+          <!-- Sample Facility Persona Accounts -->
           <div class="demo-credentials-card">
             <div class="demo-card-header">
               <span class="demo-card-tag">DEMO FACILITY ACCOUNTS</span>
