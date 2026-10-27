@@ -88,8 +88,24 @@ const hasStorage = typeof localStorage !== 'undefined';
 const savedDemoMode = hasStorage ? localStorage.getItem(STORAGE_KEY_DEMO_MODE) : null;
 const isDemoMode = savedDemoMode !== null ? savedDemoMode === 'true' : true;
 
-const savedApiUrl = hasStorage ? localStorage.getItem(STORAGE_KEY_API_URL) : null;
-const apiUrl = savedApiUrl || 'http://127.0.0.1:5000/api';
+function resolveApiBaseUrl() {
+  const hasStorage = typeof localStorage !== 'undefined';
+  const saved = hasStorage ? localStorage.getItem(STORAGE_KEY_API_URL) : null;
+  if (saved) return saved;
+
+  if (typeof window !== 'undefined') {
+    // When served directly on port 5000 by Flask, use exact origin
+    if (window.location.port === '5000') {
+      return `${window.location.origin}/api`;
+    }
+    // When served on another port (e.g. 8080), match hostname to avoid localhost vs 127.0.0.1 mismatch
+    const host = window.location.hostname || 'localhost';
+    return `http://${host}:5000/api`;
+  }
+  return 'http://127.0.0.1:5000/api';
+}
+
+const apiUrl = resolveApiBaseUrl();
 
 const savedFacilityId = (hasStorage ? localStorage.getItem(STORAGE_KEY_ACTIVE_FACILITY) : null) || 'FAC-001';
 const initialProfile = FACILITY_PROFILES[savedFacilityId] || FACILITY_PROFILES['FAC-001'];

@@ -20,14 +20,19 @@ def create_app(config_class=Config):
     init_db(config_class)
 
     # Configure CORS for local development origins
+    cors_origins = list(getattr(config_class, 'CORS_ORIGINS', []))
+    for extra in ['http://localhost:5000', 'http://127.0.0.1:5000', 'http://localhost:8080', 'http://127.0.0.1:8080', 'http://localhost:3000', 'http://127.0.0.1:3000']:
+        if extra not in cors_origins:
+            cors_origins.append(extra)
+
     CORS(app, resources={
         r"/api/*": {
-            "origins": config_class.CORS_ORIGINS,
+            "origins": cors_origins,
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Accept", "X-Client-App", "X-User-Id", "Authorization"]
         },
         r"/*": {
-            "origins": config_class.CORS_ORIGINS,
+            "origins": cors_origins,
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Accept", "X-Client-App", "X-User-Id", "Authorization"]
         }
