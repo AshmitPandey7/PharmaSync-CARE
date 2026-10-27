@@ -164,7 +164,12 @@ function renderTargetRequest() {
           <strong style="color: var(--text-heading); font-size: 15px;">${shortage.medicineName}</strong>
           <span class="badge badge-urgency-${shortage.urgency.toLowerCase()}">${shortage.urgency}</span>
         </div>
-        <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);">${shortage.id}</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);">${shortage.id}</span>
+          <button class="btn btn-outline btn-sm btn-delete-active-shortage" title="Cancel and delete this request" style="padding: 2px 8px; font-size: 11px; color: var(--rose-400); border-color: rgba(244,63,94,0.35);">
+            ✕ Cancel Request
+          </button>
+        </div>
       </div>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; font-size: 12px; color: var(--text-main);">
@@ -187,6 +192,8 @@ function renderTargetRequest() {
       </div>
     </div>
   `;
+
+  container.querySelector('.btn-delete-active-shortage')?.addEventListener('click', () => handleDeleteShortage(shortage));
 }
 
 function renderCandidates() {
@@ -200,8 +207,15 @@ function renderCandidates() {
       <div class="empty-state">
         <div class="empty-state-title">No matching suppliers found</div>
         <div class="empty-state-desc">No network facilities currently hold surplus unreserved stock for this medicine.</div>
+        <div style="margin-top: 16px; display: flex; gap: 10px; justify-content: center;">
+          <a href="#/shortages" class="btn btn-outline btn-sm">&larr; Back to Requests</a>
+          <button class="btn btn-sm btn-delete-empty-shortage" style="background: rgba(244,63,94,0.15); border: 1px solid rgba(244,63,94,0.4); color: var(--rose-400); font-weight: 600; padding: 6px 14px;">
+            ✕ Cancel / Delete This Request
+          </button>
+        </div>
       </div>
     `;
+    container.querySelector('.btn-delete-empty-shortage')?.addEventListener('click', () => handleDeleteShortage(currentMatchData?.shortage));
     return;
   }
 
@@ -387,4 +401,22 @@ function setupMatcherEvents() {
     selectedShortageId = e.target.value;
     loadMatchData();
   });
+}
+
+async function handleDeleteShortage(shortage) {
+  if (!shortage) return;
+  if (!confirm(`Are you sure you want to cancel and delete request ${shortage.id} for ${shortage.medicineName}?`)) {
+    return;
+  }
+  try {
+    const res = await api.deleteShortage(shortage.id);
+    if (res && res.success) {
+      toast.success('Request Cancelled', `Medicine request ${shortage.id} has been deleted.`);
+      window.location.hash = '#/shortages';
+    } else {
+      toast.error('Delete Failed', res?.error || 'Could not delete request.');
+    }
+  } catch (err) {
+    toast.error('Error', err.message || 'Error deleting request.');
+  }
 }

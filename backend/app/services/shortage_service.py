@@ -92,3 +92,19 @@ class ShortageService:
             details=f"Updated shortage ticket {shortage_id}: {', '.join(f'{k}={v}' for k, v in updates.items())}"
         )
         return updated
+
+
+    def delete_shortage(self, shortage_id, user_name="Clinical Officer"):
+        shortage = self.repo.get_by_id(shortage_id)
+        if not shortage:
+            return False
+        deleted = self.repo.delete(shortage_id)
+        if deleted:
+            self.audit.log(
+                action="SHORTAGE_DELETED",
+                entity=shortage_id,
+                user_name=user_name,
+                role="Clinical Officer",
+                details=f"Deleted shortage ticket {shortage_id} ({shortage.get('medicineName', 'Medicine')})"
+            )
+        return deleted

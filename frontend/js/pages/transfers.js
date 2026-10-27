@@ -238,7 +238,14 @@ function renderTableRows() {
           <span class="badge badge-status-${t.status.toLowerCase()}">${t.status}</span>
         </td>
         <td>
-          ${getRoleAwareActionButton(t, isSender, isRecipient)}
+          <div style="display: flex; gap: 6px; align-items: center;">
+            ${getRoleAwareActionButton(t, isSender, isRecipient)}
+            ${(t.status === 'PROPOSED' || t.status === 'REQUESTED') ? `
+              <button class="btn btn-outline btn-sm btn-cancel-transfer" data-id="${t.id}" data-code="${t.transferCode}" title="Cancel transfer order and release reserved stock" style="font-size: 11px; padding: 4px 8px; color: var(--rose-400); border-color: rgba(244,63,94,0.35);">
+                ✕ Cancel
+              </button>
+            ` : ''}
+          </div>
         </td>
         <td>
           <button class="btn btn-outline btn-sm btn-inspect-transfer" data-id="${t.id}" style="padding: 4px 8px; font-size: 11px;">
@@ -260,6 +267,34 @@ function renderTableRows() {
     btn.addEventListener('click', (e) => {
       const trf = transfersList.find(t => t.id === e.currentTarget.dataset.id);
       if (trf) openInspectModal(trf);
+    });
+  });
+
+  tbody.querySelectorAll('.btn-cancel-transfer').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const { id, code } = e.currentTarget.dataset;
+      if (!confirm(`Are you sure you want to cancel Transfer Order ${code}? Any reserved medicine batches will be immediately restored to available stock.`)) {
+        return;
+      }
+      try {
+        btn.disabled = true;
+        btn.textContent = '...';
+        const res = await api.cancelTransfer(id, 'Cancelled by operator');
+        if (res && res.success) {
+          toast.success('Transfer Cancelled', `Order ${code} cancelled. Reserved stock released.`);
+          const updated = await api.getTransfers();
+          transfersList = updated.data || [];
+          renderTableRows();
+        } else {
+          toast.error('Cancel Failed', res?.error || 'Could not cancel transfer.');
+          btn.disabled = false;
+          btn.textContent = '✕ Cancel';
+        }
+      } catch (err) {
+        toast.error('Error', err.message || 'Error cancelling transfer.');
+        btn.disabled = false;
+        btn.textContent = '✕ Cancel';
+      }
     });
   });
 }
@@ -456,10 +491,39 @@ function openInspectModal(trf) {
     </div>
   `;
 
-  modal.open({
+  const modalInstance = modal.open({
     title: `Transfer Details — ${trf.transferCode}`,
     content,
-    footer: `<button class="btn btn-outline btn-sm" onclick="document.querySelector('.modal-close-btn').click()">Close</button>`
+    footer: `
+      <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+        ${(trf.status === 'PROPOSED' || trf.status === 'REQUESTED') ? `
+          <button class="btn btn-sm" id="btn-modal-cancel-trf" style="color: var(--rose-400); border: 1px solid rgba(244,63,94,0.4); background: rgba(244,63,94,0.1); font-weight: 600;">
+            ✕ Cancel This Order
+          </button>
+        ` : '<div></div>'}
+        <button class="btn btn-outline btn-sm" onclick="document.querySelector('.modal-close-btn').click()">Close</button>
+      </div>
+    `
+  });
+
+  document.getElementById('btn-modal-cancel-trf')?.addEventListener('click', async () => {
+    if (!confirm(`Are you sure you want to cancel Transfer Order ${trf.transferCode}? Any reserved medicine batches will be immediately restored to available stock.`)) {
+      return;
+    }
+    try {
+      const res = await api.cancelTransfer(trf.id, 'Cancelled from inspection view');
+      if (res && res.success) {
+        toast.success('Transfer Cancelled', `Order ${trf.transferCode} cancelled. Reserved stock released.`);
+        modalInstance.close();
+        const updated = await api.getTransfers();
+        transfersList = updated.data || [];
+        renderTableRows();
+      } else {
+        toast.error('Cancel Failed', res?.error || 'Could not cancel transfer.');
+      }
+    } catch (err) {
+      toast.error('Error', err.message || 'Error cancelling transfer.');
+    }
   });
 }
 

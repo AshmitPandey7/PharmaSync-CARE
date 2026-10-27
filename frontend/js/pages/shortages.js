@@ -218,9 +218,16 @@ function renderTableRows() {
           <span class="badge ${statusBadgeClass}">${statusLabel}</span>
         </td>
         <td>
-          <a href="#/matching?shortage=${s.id}" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 10px; white-space: nowrap;">
-            ${isMyFacility ? 'Find Supplier &rarr;' : 'Match & Fulfill &rarr;'}
-          </a>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <a href="#/matching?shortage=${s.id}" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 10px; white-space: nowrap;">
+              ${isMyFacility ? 'Find Supplier &rarr;' : 'Match & Fulfill &rarr;'}
+            </a>
+            ${(s.status === 'OPEN' || s.status === 'PARTIALLY_MATCHED') ? `
+            <button class="btn btn-outline btn-sm btn-delete-shortage" data-id="${s.id}" data-name="${s.medicineName}" title="Cancel and delete this medicine request" style="font-size: 11px; padding: 4px 8px; color: var(--rose-400); border-color: rgba(244,63,94,0.35);">
+              ✕
+            </button>
+            ` : ''}
+          </div>
         </td>
       </tr>
     `;
@@ -251,6 +258,35 @@ function setupEvents() {
   });
 
   document.getElementById('btn-create-request')?.addEventListener('click', openCreateRequestModal);
+
+  document.getElementById('shortages-table-body')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.btn-delete-shortage');
+    if (!btn) return;
+    const sId = btn.getAttribute('data-id');
+    const sName = btn.getAttribute('data-name');
+    if (!confirm(`Are you sure you want to cancel and delete request ${sId} for ${sName}?`)) {
+      return;
+    }
+    try {
+      btn.disabled = true;
+      btn.textContent = '...';
+      const res = await api.deleteShortage(sId);
+      if (res && res.success) {
+        toast.success('Request Deleted', `Medicine request ${sId} has been removed.`);
+        const updated = await api.getShortages();
+        shortagesList = updated.data || [];
+        renderTableRows();
+      } else {
+        toast.error('Delete Failed', res?.error || 'Could not delete request.');
+        btn.disabled = false;
+        btn.textContent = '✕';
+      }
+    } catch (err) {
+      toast.error('Delete Error', err.message || 'Error deleting request.');
+      btn.disabled = false;
+      btn.textContent = '✕';
+    }
+  });
 
   document.getElementById('btn-export-shortages')?.addEventListener('click', () => {
     exportToCSV('PharmaSync_Medicine_Requests', shortagesList.map(s => ({

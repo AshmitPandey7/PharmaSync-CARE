@@ -76,3 +76,15 @@ def update_shortage(id):
         return success_response(data=shortage)
     except Exception as e:
         return error_response(code="SHORTAGE_UPDATE_ERROR", message=str(e), status_code=400)
+
+
+@shortages_bp.route('/shortages/<id>', methods=['DELETE'])
+def delete_shortage(id):
+    user_id = request.headers.get('X-User-Id', 'Clinical Officer')
+    try:
+        deleted = shortage_service.delete_shortage(id, user_name=user_id)
+        if not deleted:
+            return error_response(code="SHORTAGE_NOT_FOUND", message=f"Shortage ticket '{id}' not found.", status_code=404)
+        return success_response(data={"id": id, "deleted": True, "message": f"Shortage ticket '{id}' deleted successfully."})
+    except Exception as e:
+        return error_response(code="SHORTAGE_DELETE_ERROR", message=str(e), status_code=500)

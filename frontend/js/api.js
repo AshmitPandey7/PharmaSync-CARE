@@ -454,6 +454,21 @@ export const api = {
     });
   },
 
+  async deleteShortage(id) {
+    if (config.DEMO_MODE) {
+      const idx = demoStore.state.shortages.findIndex(s => s.id === id);
+      if (idx === -1) return { success: false, error: 'Shortage not found' };
+      const [removed] = demoStore.state.shortages.splice(idx, 1);
+      this.addAuditLog('SHORTAGE_DELETED', `Shortage ${id}`, `Deleted shortage request for ${removed.medicineName}`);
+      demoStore.save();
+      return { success: true, data: { id, deleted: true } };
+    }
+
+    return fetchFromApi(`/shortages/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
   // Smart Matching
   async findMatchCandidates(shortageId) {
     if (config.DEMO_MODE) {
@@ -857,6 +872,20 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ note })
     });
+  },
+
+  async cancelTransfer(id, note = 'Order cancelled by operator') {
+    if (config.DEMO_MODE) {
+      return this.updateTransferStatus(id, 'CANCELLED', note);
+    }
+    return fetchFromApi(`/transfers/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    });
+  },
+
+  async deleteTransfer(id) {
+    return this.cancelTransfer(id, 'Order deleted by operator');
   },
 
 

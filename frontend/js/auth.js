@@ -106,7 +106,30 @@ export const auth = {
   getSession() {
     try {
       const raw = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (raw) return JSON.parse(raw);
+      if (sessionStorage.getItem('pharmasync_explicit_logout')) return null;
+
+      // Auto-initialize default demo session (Dr. Sunita Nair, Apex Central Hospital) for seamless presentation
+      const account = DEMO_ACCOUNTS[0];
+      const profile = FACILITY_PROFILES[account.facilityId] || account;
+      const sessionData = {
+        token: 'ps_auto_' + Math.random().toString(36).substring(2),
+        timestamp: Date.now(),
+        user: {
+          id: account.id || profile.id,
+          username: account.username,
+          name: account.name,
+          role: account.role,
+          roleKey: account.roleKey || profile.roleKey,
+          email: account.email,
+          facilityId: account.facilityId,
+          facilityName: account.facilityName,
+          initials: profile.initials
+        }
+      };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+      config.setActiveFacility(account.facilityId);
+      return sessionData;
     } catch {
       return null;
     }
@@ -127,6 +150,7 @@ export const auth = {
    * Authenticate user with credentials
    */
   login(usernameOrEmail, password, rememberMe = false) {
+    sessionStorage.removeItem('pharmasync_explicit_logout');
     const identifier = (usernameOrEmail || '').trim().toLowerCase();
     const pass = (password || '').trim();
 
@@ -204,6 +228,7 @@ export const auth = {
    */
   logout() {
     try {
+      sessionStorage.setItem('pharmasync_explicit_logout', 'true');
       sessionStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(REMEMBER_KEY);

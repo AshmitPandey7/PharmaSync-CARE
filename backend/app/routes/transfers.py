@@ -114,3 +114,14 @@ def cancel_transfer(id):
         return success_response(data=updated)
     except Exception as e:
         return error_response(code="CANCEL_ERROR", message=str(e), status_code=400)
+
+
+@transfers_bp.route('/transfers/<id>', methods=['DELETE'])
+def delete_transfer(id):
+    data = request.get_json(silent=True) or {}
+    user_id = request.headers.get('X-User-Id', 'Pharmacist')
+    try:
+        updated = transfer_service.advance_status(id, 'CANCELLED', note=data.get('note', 'Order deleted by operator'), user_name=user_id)
+        return success_response(data={"id": id, "cancelled": True, "message": f"Transfer '{id}' cancelled and reserved stock released."})
+    except Exception as e:
+        return error_response(code="CANCEL_ERROR", message=str(e), status_code=400)
