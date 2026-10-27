@@ -86,7 +86,7 @@ export const FACILITY_PROFILES = {
 // Read persisted settings or fallback to defaults
 const hasStorage = typeof localStorage !== 'undefined';
 const savedDemoMode = hasStorage ? localStorage.getItem(STORAGE_KEY_DEMO_MODE) : null;
-const isDemoMode = savedDemoMode !== null ? savedDemoMode === 'true' : false;
+const isDemoMode = savedDemoMode !== null ? savedDemoMode === 'true' : true;
 
 const savedApiUrl = hasStorage ? localStorage.getItem(STORAGE_KEY_API_URL) : null;
 const apiUrl = savedApiUrl || 'http://127.0.0.1:5000/api';

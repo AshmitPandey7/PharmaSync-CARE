@@ -38,3 +38,14 @@ def check_health():
         "cluster": "Connected" if not db.is_mock else "In-Memory Simulation",
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
+
+
+@health_bp.route('/system/reset', methods=['POST'])
+def reset_database():
+    try:
+        from scripts.seed_data import seed_database
+        db_mgr = get_db()
+        seed_database(db_mgr.db)
+        return success_response(data={"status": "RESET_COMPLETE", "message": "Database reseeded to baseline state."})
+    except Exception as e:
+        return error_response(code="RESET_ERROR", message=str(e), status_code=500)

@@ -15,7 +15,7 @@ import {
 } from './demo-data.js';
 
 // Local state for Demo Mode with session/local persistence
-const LOCAL_STORAGE_STATE_KEY = 'pharmasync_demo_state_v2';
+const LOCAL_STORAGE_STATE_KEY = 'pharmasync_demo_state_v4';
 
 class DemoStateStore {
   constructor() {
@@ -138,6 +138,9 @@ async function fetchFromApi(endpoint, options = {}) {
 export const api = {
   // Utility: Reset demo data
   resetDemoData() {
+    demoStore.reset();
+  },
+  async resetAllData() {
     demoStore.reset();
   },
 
@@ -696,8 +699,19 @@ export const api = {
         ...transferData
       };
 
+      // Transactionally reserve stock from donor batch in demo store
+      if (newTransfer.batchId) {
+        const batch = demoStore.state.inventory.find(b => b.id === newTransfer.batchId);
+        if (batch) {
+          const qty = Number(newTransfer.quantity);
+          batch.reservedQuantity = (batch.reservedQuantity || 0) + qty;
+          batch.availableQuantity = Math.max(0, (batch.availableQuantity || batch.totalQuantity) - qty);
+          batch.eligibleSurplusQuantity = Math.max(0, (batch.eligibleSurplusQuantity || 0) - qty);
+        }
+      }
+
       demoStore.state.transfers.unshift(newTransfer);
-      this.addAuditLog('TRANSFER_PROPOSED', newTransfer.transferCode, `Created transfer proposal for ${newTransfer.quantity} units of ${newTransfer.medicineName}`);
+      this.addAuditLog('TRANSFER_CREATED', newTransfer.transferCode, `Created transfer order for ${newTransfer.quantity} units of ${newTransfer.medicineName}`);
       demoStore.save();
       return { success: true, data: newTransfer };
     }
@@ -739,6 +753,70 @@ export const api = {
         by: config.CURRENT_USER.name,
         note: note || `Status updated to ${newStatus}`
       });
+
+      // Transactional effects in demo store
+      if (newStatus === 'RECEIVED') {
+        const qty = Number(trf.quantity);
+        // A. Decrement donor reserved and total stock
+        if (trf.batchId) {
+          const donorBatch = demoStore.state.inventory.find(b => b.id === trf.batchId);
+          if (donorBatch) {
+            donorBatch.reservedQuantity = Math.max(0, (donorBatch.reservedQuantity || 0) - qty);
+            donorBatch.totalQuantity = Math.max(0, (donorBatch.totalQuantity || 0) - qty);
+          }
+        }
+        // B. Credit stock to recipient facility
+        const recipientBatch = demoStore.state.inventory.find(b =>
+          b.facilityId === trf.recipientFacilityId &&
+          b.medicineName.toLowerCase() === trf.medicineName.toLowerCase()
+        );
+        if (recipientBatch) {
+          recipientBatch.availableQuantity = (recipientBatch.availableQuantity || 0) + qty;
+          recipientBatch.totalQuantity = (recipientBatch.totalQuantity || 0) + qty;
+        } else {
+          demoStore.state.inventory.push({
+            id: `BAT-${Math.floor(200 + Math.random() * 800)}`,
+            batchNumber: `REC-${trf.transferCode.replace('TRF-', '')}`,
+            medicineName: trf.medicineName,
+            genericName: trf.genericName || trf.medicineName,
+            strength: trf.strength || 'Standard',
+            dosageForm: trf.dosageForm || 'Oral Solid',
+            category: trf.category || 'Essential',
+            totalQuantity: qty,
+            reservedQuantity: 0,
+            availableQuantity: qty,
+            eligibleSurplusQuantity: 0,
+            expectedMonthlyDemand: 50,
+            safetyStockThreshold: 20,
+            expiryDate: '2027-06-30',
+            unitPrice: 10.00,
+            facilityId: trf.recipientFacilityId,
+            coldChainRequired: false,
+            status: 'ADEQUATE'
+          });
+        }
+        // C. Update matching shortage ticket
+        const matchingShortage = demoStore.state.shortages.find(s =>
+          (trf.shortageId && s.id === trf.shortageId) ||
+          (s.facilityId === trf.recipientFacilityId && s.medicineName.toLowerCase() === trf.medicineName.toLowerCase() && s.status !== 'FULFILLED')
+        );
+        if (matchingShortage) {
+          matchingShortage.fulfilledQuantity = (matchingShortage.fulfilledQuantity || 0) + qty;
+          matchingShortage.unmetQuantity = Math.max(0, (matchingShortage.unmetQuantity || matchingShortage.requiredQuantity) - qty);
+          matchingShortage.status = matchingShortage.unmetQuantity === 0 ? 'FULFILLED' : 'PARTIALLY_MATCHED';
+        }
+      } else if (newStatus === 'CANCELLED' || newStatus === 'REJECTED') {
+        // Release reservation back to available
+        if (trf.batchId) {
+          const donorBatch = demoStore.state.inventory.find(b => b.id === trf.batchId);
+          if (donorBatch) {
+            const qty = Number(trf.quantity);
+            donorBatch.reservedQuantity = Math.max(0, (donorBatch.reservedQuantity || 0) - qty);
+            donorBatch.availableQuantity = (donorBatch.availableQuantity || 0) + qty;
+            donorBatch.eligibleSurplusQuantity = (donorBatch.eligibleSurplusQuantity || 0) + qty;
+          }
+        }
+      }
 
       this.addAuditLog(`TRANSFER_${newStatus}`, trf.transferCode, `Updated status to ${newStatus}. ${note}`);
       demoStore.save();

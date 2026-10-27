@@ -7,12 +7,16 @@ import { sidebar } from './components/sidebar.js';
 import { topbar } from './components/topbar.js';
 import { router } from './router.js';
 import { toast } from './components/toast.js';
+import { guidedDemo } from './components/guided-demo.js';
 
 function bootstrap() {
   try {
     // Initialize UI Shell
     sidebar.render('dashboard');
     topbar.render('Dashboard');
+
+    // Initialize Guided Demo Assistant
+    guidedDemo.init();
 
     // Initialize Router
     router.init();
@@ -23,7 +27,7 @@ function bootstrap() {
       setTimeout(() => {
         toast.info(
           'PharmaSync CARE Ready',
-          'Medicine redistribution workflow: Add Stock \u2192 Create Request \u2192 Find Supplier \u2192 Create Transfer \u2192 Mark Received.'
+          'Academic DBMS Demonstration Mode: Step-by-step guided walkthrough available on the Dashboard.'
         );
       }, 600);
     }

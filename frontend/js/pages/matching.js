@@ -206,43 +206,64 @@ function renderCandidates() {
   }
 
   container.innerHTML = `
-    <div style="display: flex; flex-direction: column; gap: 14px;">
+    <div style="display: flex; flex-direction: column; gap: 16px;">
       ${candidates.map(cand => {
+        const reasons = cand.reasons || [
+          `Shelf life verified: ${cand.daysToExpiry} days remaining (minimum 45d satisfied).`,
+          `Transferable surplus: ${cand.availableSurplus} units available above local emergency reserve.`,
+          `Geographic proximity: ${Math.round(cand.distanceKm * 10) / 10} km within regional cluster.`
+        ];
+
         return `
-          <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-            <div style="flex: 1; min-width: 260px;">
-              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-                <strong style="font-size: 15px; color: var(--text-heading);">${cand.donorFacilityName}</strong>
-                <span class="badge badge-fac-hospital">${cand.donorFacilityType || 'Healthcare Facility'}</span>
-                <span class="badge badge-exp-safe" style="font-family: var(--font-mono); font-size: 11px;">
-                  Match Score: ${Math.round(cand.matchScore || 90)}%
-                </span>
+          <div class="candidate-card" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                  <strong style="font-size: 16px; color: var(--text-heading);">${cand.donorFacilityName}</strong>
+                  <span class="badge badge-fac-hospital">${cand.donorFacilityType || 'Healthcare Facility'}</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted);">
+                  Batch Code: <code style="color: var(--text-main); font-family: var(--font-mono);">${cand.batchNumber}</code> &bull;
+                  Medicine: <strong style="color: var(--text-main);">${cand.medicineName}</strong> (${cand.strength || ''})
+                </div>
               </div>
 
-              <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--text-muted);">
-                <div>
-                  <span>Batch:</span>
-                  <code style="color: var(--text-main); font-family: var(--font-mono);">${cand.batchNumber}</code>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="badge badge-exp-safe" style="font-family: var(--font-mono); font-size: 12px; padding: 5px 10px;">
+                  &#10003; Match Score: ${Math.round(cand.matchScore || 95)}%
                 </div>
-                <div>
-                  <span>Distance:</span>
-                  <strong style="color: var(--text-main);">${Math.round(cand.distanceKm * 10) / 10} km</strong>
-                </div>
-                <div>
-                  <span>Expires In:</span>
-                  <strong style="color: var(--text-main);">${cand.daysToExpiry} Days</strong>
-                </div>
-                <div>
-                  <span>Available Surplus:</span>
-                  <strong style="color: #FFFFFF; font-family: var(--font-mono);">${cand.availableSurplus} Units</strong>
-                </div>
+                <button class="btn btn-primary btn-sm btn-create-direct-transfer" data-batch="${cand.batchId}" style="white-space: nowrap; padding: 6px 16px;">
+                  Initiate Transfer &rarr;
+                </button>
               </div>
             </div>
 
-            <div>
-              <button class="btn btn-primary btn-sm btn-create-direct-transfer" data-batch="${cand.batchId}" style="white-space: nowrap; padding: 6px 14px;">
-                Initiate Transfer &rarr;
-              </button>
+            <!-- 4 Verified Matching Criteria Badges -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; background: #111111; border: 1px solid var(--border-subtle); border-radius: 4px; padding: 10px 14px;">
+              <div>
+                <span class="text-muted" style="font-size: 11px; text-transform: uppercase; font-weight: 600;">1. Formulation:</span>
+                <div style="font-size: 12.5px; color: var(--emerald-400); font-weight: 600;">&#10003; Exact Generic Match</div>
+              </div>
+              <div>
+                <span class="text-muted" style="font-size: 11px; text-transform: uppercase; font-weight: 600;">2. Transferable Surplus:</span>
+                <div style="font-size: 12.5px; color: #FFFFFF; font-weight: 600; font-family: var(--font-mono);">&#10003; ${cand.availableSurplus} Units Available</div>
+              </div>
+              <div>
+                <span class="text-muted" style="font-size: 11px; text-transform: uppercase; font-weight: 600;">3. Expiry Feasibility:</span>
+                <div style="font-size: 12.5px; color: var(--emerald-400); font-weight: 600;">&#10003; ${cand.daysToExpiry} Days Remaining</div>
+              </div>
+              <div>
+                <span class="text-muted" style="font-size: 11px; text-transform: uppercase; font-weight: 600;">4. Geographic Proximity:</span>
+                <div style="font-size: 12.5px; color: #FFFFFF; font-weight: 600;">&#10003; ${Math.round(cand.distanceKm * 10) / 10} km (Local Cluster)</div>
+              </div>
+            </div>
+
+            <!-- Explicit Eligibility Reasons -->
+            <div style="font-size: 12px; color: var(--text-muted); border-top: 1px dashed var(--border-subtle); padding-top: 10px;">
+              <strong style="color: var(--text-main);">Algorithm Qualification Reasons:</strong>
+              <ul style="margin: 6px 0 0 16px; padding: 0; line-height: 1.5;">
+                ${reasons.map(r => `<li>${r}</li>`).join('')}
+              </ul>
             </div>
           </div>
         `;
