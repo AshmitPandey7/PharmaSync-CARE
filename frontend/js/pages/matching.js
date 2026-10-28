@@ -1,7 +1,6 @@
 /**
- * PharmaSync CARE — Find Medicines Page
- * Choose an open request, view facilities with matching eligible stock,
- * and create a transfer directly.
+ * PharmaSync CARE — Intelligent Supplier Matching & Route Preview
+ * Multi-criteria ranking engine with Leaflet geographic corridor route visualization.
  */
 
 import { api } from '../api.js';
@@ -11,28 +10,43 @@ import { toast } from '../components/toast.js';
 import { modal } from '../components/modal.js';
 
 let allShortages = [];
+let facilitiesList = [];
+let facilitiesMap = {};
 let selectedShortageId = null;
 let currentMatchData = null;
+let matchingMapInstance = null;
+let matchingRouteLine = null;
+let candidateMarkers = [];
+let selectedCandidateIndex = 0;
 
 export async function render(container) {
-  const shortagesRes = await api.getShortages();
+  if (matchingMapInstance) {
+    try { matchingMapInstance.remove(); } catch (e) {}
+    matchingMapInstance = null;
+  }
 
-  if (!shortagesRes.success && shortagesRes.isNetworkError) {
+  const [shortagesRes, facRes] = await Promise.all([
+    api.getShortages(),
+    api.getFacilities()
+  ]);
+
+  if ((!shortagesRes.success && shortagesRes.isNetworkError) || (!facRes.success && facRes.isNetworkError)) {
     renderErrorState(container, {
-      title: 'Flask API Offline',
-      message: shortagesRes.error,
+      title: 'Backend API Offline',
+      message: shortagesRes.error || facRes.error,
       onRetry: () => render(container)
     });
     return;
   }
 
   allShortages = (shortagesRes.data || []).filter(s => s.status === 'OPEN' || s.status === 'PARTIALLY_MATCHED');
+  facilitiesList = facRes.data || [];
+  facilitiesMap = facilitiesList.reduce((acc, f) => ({ ...acc, [f.id]: f }), {});
 
   const activeFacilityId = config.ACTIVE_FACILITY_ID;
   const activeProfile = config.getActiveFacilityProfile();
   const myShortage = allShortages.find(s => s.facilityId === activeFacilityId);
 
-  // Check URL query param for pre-selected shortage, or prioritize active facility's shortage
   const hash = window.location.hash;
   const matchParam = hash.match(/shortage=([^&]+)/);
   if (matchParam && matchParam[1] && allShortages.some(s => s.id === matchParam[1])) {
@@ -57,39 +71,39 @@ export async function render(container) {
           Find Medicines
         </h1>
         <p class="page-description">
-          Match an open medicine request with eligible facilities holding stock in the database and create a transfer.
+          Algorithmic multi-criteria supplier matching with interactive geographic route visualization.
         </p>
       </div>
     </div>
 
-    <!-- Active Persona Context Notice -->
+    <!-- Active Facility Context Notice -->
     <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; font-size: 12.5px; color: var(--text-main); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
       <div>
         Operating Facility: <strong style="color: #FFFFFF;">${activeProfile.facilityName}</strong> &bull;
-        Logged in as: <strong style="color: var(--text-heading);">${activeProfile.name}</strong> (${activeProfile.role})
+        Role: <strong style="color: var(--text-heading);">${activeProfile.name}</strong> (${activeProfile.role})
       </div>
       <div class="text-muted" style="font-size: 11.5px;">
-        To request medicine for your facility, select your shortage below and initiate a transfer from any eligible donor.
+        Select an open requisition below to rank compatible surplus stock and inspect courier route.
       </div>
     </div>
 
     ${allShortages.length === 0 ? `
       <div class="card" style="padding: 32px; text-align: center;">
         <div style="font-size: 16px; font-weight: bold; color: var(--text-heading); margin-bottom: 8px;">
-          No Open Medicine Requests
+          No Open Medicine Shortages
         </div>
         <p class="text-muted" style="margin-bottom: 16px; font-size: 13px;">
-          All medicine requests are currently fulfilled. Create a new request to find matching suppliers.
+          All declared requisitions across the healthcare network are currently fulfilled.
         </p>
-        <a href="#/shortages" class="btn btn-primary btn-sm">+ Create Medicine Request</a>
+        <a href="#/shortages" class="btn btn-primary btn-sm">+ Declare Medicine Request</a>
       </div>
     ` : `
-      <!-- Step 1: Select Open Request -->
+      <!-- Step 1: Select Requisition to Fulfill -->
       <div class="card" style="margin-bottom: 20px;">
         <div class="card-header">
           <div>
-            <div class="card-title">1. Select Medicine Request to Fulfill</div>
-            <div class="card-subtitle">Choose which open clinic request you want to match with suppliers</div>
+            <div class="card-title">1. Select Target Medicine Requisition</div>
+            <div class="card-subtitle">Choose an open deficit ticket to evaluate matching donor inventory</div>
           </div>
         </div>
 
@@ -98,30 +112,54 @@ export async function render(container) {
             ${allShortages.map(s => {
               const isMine = s.facilityId === activeFacilityId;
               return `
-              <option value="${s.id}" ${s.id === selectedShortageId ? 'selected' : ''}>
-                ${isMine ? '★ [Our Request] ' : ''}${s.id}: ${s.medicineName} (${s.unmetQuantity} units needed) &mdash; ${s.facilityName}
-              </option>
-            `;}).join('')}
+                <option value="${s.id}" ${s.id === selectedShortageId ? 'selected' : ''}>
+                  ${isMine ? '★ [Our Facility] ' : ''}${s.id}: ${s.medicineName} (${s.unmetQuantity} units required) &mdash; ${s.facilityName}
+                </option>
+              `;
+            }).join('')}
           </select>
         </div>
 
-        <!-- Selected Request Details Box -->
-        <div id="target-request-details">
-          <!-- Rendered dynamically -->
-        </div>
+        <div id="target-request-details"></div>
       </div>
 
-      <!-- Step 2: Available Suppliers with Matching Stock -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">2. Facilities Holding Matching Stock</div>
-            <div class="card-subtitle">Facilities with unreserved, unexpired stock matching this exact medicine</div>
+      <!-- Step 2: Integrated Matching Layout (Candidates + Route Map) -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; align-items: start;">
+        <!-- Left Column: Ranked Candidates -->
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">2. Ranked Eligible Supplier Facilities</div>
+                <div class="card-subtitle">Evaluated on formulation, surplus reserve buffer, shelf-life, and proximity</div>
+              </div>
+            </div>
+
+            <div id="candidates-container"></div>
           </div>
         </div>
 
-        <div id="candidates-container">
-          <!-- Rendered dynamically -->
+        <!-- Right Column: Interactive Map & Route Preview -->
+        <div>
+          <div class="card" style="position: sticky; top: 80px;">
+            <div class="card-header" style="margin-bottom: 10px;">
+              <div>
+                <div class="card-title">Geographic Route &amp; Proximity Preview</div>
+                <div class="card-subtitle" id="matching-map-subtitle">Bengaluru Urban Healthcare Cluster</div>
+              </div>
+              <span class="badge badge-fac-hospital" id="route-distance-badge">Route Estimate</span>
+            </div>
+
+            <div id="matching-leaflet-map" style="height: 440px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); overflow: hidden; background: #0b1120;"></div>
+
+            <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); border-top: 1px solid var(--border-subtle); padding-top: 10px;">
+              <div style="display: flex; gap: 12px;">
+                <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #F43F5E; margin-right: 4px;"></span>Requester</span>
+                <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10B981; margin-right: 4px;"></span>Supplier</span>
+              </div>
+              <span>Straight-line Geodesic Estimate</span>
+            </div>
+          </div>
         </div>
       </div>
     `}
@@ -148,8 +186,10 @@ async function loadMatchData() {
   }
 
   currentMatchData = res.data;
+  selectedCandidateIndex = 0;
   renderTargetRequest();
   renderCandidates();
+  initMatchingMap();
 }
 
 function renderTargetRequest() {
@@ -166,7 +206,7 @@ function renderTargetRequest() {
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);">${shortage.id}</span>
-          <button class="btn btn-outline btn-sm btn-delete-active-shortage" title="Cancel and delete this request" style="padding: 2px 8px; font-size: 11px; color: var(--rose-400); border-color: rgba(244,63,94,0.35);">
+          <button class="btn btn-outline btn-sm btn-delete-active-shortage" title="Cancel this request" style="padding: 2px 8px; font-size: 11px; color: var(--rose-400); border-color: rgba(244,63,94,0.35);">
             ✕ Cancel Request
           </button>
         </div>
@@ -182,11 +222,11 @@ function renderTargetRequest() {
           <div><strong style="color: var(--rose-400); font-family: var(--font-mono); font-size: 13.5px;">${shortage.unmetQuantity} Units</strong></div>
         </div>
         <div>
-          <span class="text-muted">Strength & Form:</span>
+          <span class="text-muted">Strength &amp; Form:</span>
           <div>${shortage.strength} &bull; ${shortage.dosageForm}</div>
         </div>
         <div>
-          <span class="text-muted">Needed By:</span>
+          <span class="text-muted">Required Deadline:</span>
           <div style="font-family: var(--font-mono);">${shortage.requiredByDate}</div>
         </div>
       </div>
@@ -206,11 +246,11 @@ function renderCandidates() {
     container.innerHTML = `
       <div class="empty-state">
         <div class="empty-state-title">No matching suppliers found</div>
-        <div class="empty-state-desc">No network facilities currently hold surplus unreserved stock for this medicine.</div>
+        <div class="empty-state-desc">No network facilities currently hold surplus unreserved stock matching this formulation.</div>
         <div style="margin-top: 16px; display: flex; gap: 10px; justify-content: center;">
           <a href="#/shortages" class="btn btn-outline btn-sm">&larr; Back to Requests</a>
           <button class="btn btn-sm btn-delete-empty-shortage" style="background: rgba(244,63,94,0.15); border: 1px solid rgba(244,63,94,0.4); color: var(--rose-400); font-weight: 600; padding: 6px 14px;">
-            ✕ Cancel / Delete This Request
+            ✕ Cancel This Request
           </button>
         </div>
       </div>
@@ -220,64 +260,51 @@ function renderCandidates() {
   }
 
   container.innerHTML = `
-    <div style="display: flex; flex-direction: column; gap: 16px;">
-      ${candidates.map(cand => {
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      ${candidates.map((cand, idx) => {
+        const isSelected = idx === selectedCandidateIndex;
         const reasons = cand.reasons || [
-          `Shelf life verified: ${cand.daysToExpiry} days remaining (minimum 45d satisfied).`,
-          `Transferable surplus: ${cand.availableSurplus} units available above local emergency reserve.`,
-          `Geographic proximity: ${Math.round(cand.distanceKm * 10) / 10} km within regional cluster.`
+          `Formulation compatible with request parameters.`,
+          `Transferable surplus of ${cand.availableSurplus} units verified above local reserve.`,
+          `Remaining shelf life: ${cand.daysToExpiry} days (satisfies &ge; 45d policy).`
         ];
 
         return `
-          <div class="candidate-card" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 18px;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+          <div class="candidate-card-item ${isSelected ? 'selected-card' : ''}" data-idx="${idx}" style="background: ${isSelected ? '#171717' : 'var(--bg-surface)'}; border: 1px solid ${isSelected ? '#FFFFFF' : 'var(--border-subtle)'}; border-radius: var(--radius-sm); padding: 16px; cursor: pointer; transition: all 0.2s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
               <div>
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
-                  <strong style="font-size: 16px; color: var(--text-heading);">${cand.donorFacilityName}</strong>
-                  <span class="badge badge-fac-hospital">${cand.donorFacilityType || 'Healthcare Facility'}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <strong style="font-size: 15px; color: var(--text-heading);">${cand.donorFacilityName}</strong>
+                  <span class="badge badge-fac-hospital" style="font-size: 10px;">${cand.donorType || 'Healthcare Facility'}</span>
                 </div>
-                <div style="font-size: 12px; color: var(--text-muted);">
-                  Batch Code: <code style="color: var(--text-main); font-family: var(--font-mono);">${cand.batchNumber}</code> &bull;
-                  Medicine: <strong style="color: var(--text-main);">${cand.medicineName}</strong> (${cand.strength || ''})
+                <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                  Batch: <code style="color: #FFFFFF; font-family: var(--font-mono);">${cand.batchNumber}</code> &bull;
+                  Available: <strong style="color: #FFFFFF;">${cand.availableSurplus} Units</strong> &bull;
+                  Distance: <strong style="color: #FFFFFF;">${Math.round(cand.distanceKm * 10) / 10} km</strong>
                 </div>
               </div>
 
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div class="badge badge-exp-safe" style="font-family: var(--font-mono); font-size: 12px; padding: 5px 10px;">
-                  &#10003; Match Score: ${Math.round(cand.matchScore || 95)}%
-                </div>
-                <button class="btn btn-primary btn-sm btn-create-direct-transfer" data-batch="${cand.batchId}" style="white-space: nowrap; padding: 6px 16px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="badge ${cand.isEligible ? 'badge-exp-safe' : 'badge-exp-critical'}" style="font-family: var(--font-mono); font-size: 11.5px;">
+                  Score: ${Math.round(cand.matchScore || 90)}%
+                </span>
+                <button class="btn btn-primary btn-sm btn-create-direct-transfer" data-batch="${cand.batchId}" style="padding: 4px 12px; font-size: 11.5px; white-space: nowrap;">
                   Initiate Transfer &rarr;
                 </button>
               </div>
             </div>
 
-            <!-- 4 Verified Matching Criteria Badges -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; background: #111111; border: 1px solid var(--border-subtle); border-radius: 4px; padding: 10px 14px;">
-              <div>
-                <span class="text-muted" style="font-size: 11px; text-transform: uppercase; font-weight: 600;">1. Formulation:</span>
-                <div style="font-size: 12.5px; color: var(--emerald-400); font-weight: 600;">&#10003; Exact Generic Match</div>
-              </div>
-              <div>
-                <span class="text-muted" style="font-size: 11px; text-transform: uppercase; font-weight: 600;">2. Transferable Surplus:</span>
-                <div style="font-size: 12.5px; color: #FFFFFF; font-weight: 600; font-family: var(--font-mono);">&#10003; ${cand.availableSurplus} Units Available</div>
-              </div>
-              <div>
-                <span class="text-muted" style="font-size: 11px; text-transform: uppercase; font-weight: 600;">3. Expiry Feasibility:</span>
-                <div style="font-size: 12.5px; color: var(--emerald-400); font-weight: 600;">&#10003; ${cand.daysToExpiry} Days Remaining</div>
-              </div>
-              <div>
-                <span class="text-muted" style="font-size: 11px; text-transform: uppercase; font-weight: 600;">4. Geographic Proximity:</span>
-                <div style="font-size: 12.5px; color: #FFFFFF; font-weight: 600;">&#10003; ${Math.round(cand.distanceKm * 10) / 10} km (Local Cluster)</div>
-              </div>
+            <!-- Qualification Metrics Grid -->
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 11px; margin-bottom: 8px; background: #111111; padding: 8px 10px; border-radius: 4px; border: 1px solid #222222;">
+              <div><span class="text-muted">Surplus:</span> <strong style="color: #FFFFFF;">${cand.availableSurplus} units</strong></div>
+              <div><span class="text-muted">Shelf Life:</span> <strong style="color: #34D399;">${cand.daysToExpiry}d remaining</strong></div>
+              <div><span class="text-muted">Transit:</span> <strong style="color: #FFFFFF;">${Math.round(cand.distanceKm * 10) / 10} km</strong></div>
+              <div><span class="text-muted">Cold Chain:</span> <strong>${cand.coldChainRequired ? 'Required (2-8°C)' : 'Ambient'}</strong></div>
             </div>
 
-            <!-- Explicit Eligibility Reasons -->
-            <div style="font-size: 12px; color: var(--text-muted); border-top: 1px dashed var(--border-subtle); padding-top: 10px;">
-              <strong style="color: var(--text-main);">Algorithm Qualification Reasons:</strong>
-              <ul style="margin: 6px 0 0 16px; padding: 0; line-height: 1.5;">
-                ${reasons.map(r => `<li>${r}</li>`).join('')}
-              </ul>
+            <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.4;">
+              <strong style="color: var(--text-main);">Qualification:</strong>
+              ${reasons[0] || 'Meets criteria.'}
             </div>
           </div>
         `;
@@ -285,6 +312,18 @@ function renderCandidates() {
     </div>
   `;
 
+  // Attach card click to focus map
+  container.querySelectorAll('.candidate-card-item').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-create-direct-transfer')) return;
+      const idx = Number(card.dataset.idx);
+      selectedCandidateIndex = idx;
+      renderCandidates();
+      updateMapRoute();
+    });
+  });
+
+  // Attach initiate transfer modal
   container.querySelectorAll('.btn-create-direct-transfer').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const batchId = e.currentTarget.dataset.batch;
@@ -292,6 +331,100 @@ function renderCandidates() {
       if (cand) openCreateTransferModal(cand);
     });
   });
+}
+
+function initMatchingMap() {
+  const mapEl = document.getElementById('matching-leaflet-map');
+  if (!mapEl || !window.L) return;
+
+  if (matchingMapInstance) {
+    try { matchingMapInstance.remove(); } catch (e) {}
+    matchingMapInstance = null;
+  }
+
+  const shortage = currentMatchData?.shortage;
+  const reqFac = facilitiesMap[shortage?.facilityId] || { coordinates: [12.9150, 77.5820] };
+  const reqCoords = reqFac.coordinates || [12.9150, 77.5820];
+
+  matchingMapInstance = window.L.map('matching-leaflet-map').setView(reqCoords, 12);
+
+  window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(matchingMapInstance);
+
+  updateMapRoute();
+}
+
+function updateMapRoute() {
+  if (!matchingMapInstance || !window.L || !currentMatchData) return;
+
+  const shortage = currentMatchData.shortage;
+  const candidates = currentMatchData.candidates || [];
+  const reqFac = facilitiesMap[shortage.facilityId] || { name: shortage.facilityName, coordinates: [12.9150, 77.5820], type: 'Rural Health Centre' };
+  const reqCoords = reqFac.coordinates || [12.9150, 77.5820];
+
+  // Clear existing layers
+  candidateMarkers.forEach(m => matchingMapInstance.removeLayer(m));
+  candidateMarkers = [];
+  if (matchingRouteLine) {
+    matchingMapInstance.removeLayer(matchingRouteLine);
+    matchingRouteLine = null;
+  }
+
+  // Add Requester marker
+  const reqIcon = window.L.divIcon({
+    className: 'custom-map-marker',
+    html: `<div style="background: #F43F5E; width: 32px; height: 32px; border-radius: 50%; border: 3px solid #FFFFFF; box-shadow: 0 0 12px rgba(244,63,94,0.7); display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-weight: bold; font-size: 11px;">REQ</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16]
+  });
+
+  const reqMarker = window.L.marker(reqCoords, { icon: reqIcon }).addTo(matchingMapInstance);
+  reqMarker.bindPopup(`<strong>Requester: ${reqFac.name}</strong><br/>Needed: ${shortage.unmetQuantity} units of ${shortage.medicineName}`);
+  candidateMarkers.push(reqMarker);
+
+  const bounds = [reqCoords];
+
+  if (candidates.length > 0) {
+    const activeCand = candidates[selectedCandidateIndex] || candidates[0];
+    const donorFac = facilitiesMap[activeCand.donorFacilityId] || { coordinates: [12.9716, 77.5946] };
+    const donorCoords = donorFac.coordinates || [12.9716, 77.5946];
+
+    // Update distance badge
+    const badgeEl = document.getElementById('route-distance-badge');
+    const subtitleEl = document.getElementById('matching-map-subtitle');
+    if (badgeEl) badgeEl.textContent = `${Math.round(activeCand.distanceKm * 10) / 10} km Transit`;
+    if (subtitleEl) subtitleEl.textContent = `${donorFac.name || activeCand.donorFacilityName} ➔ ${reqFac.name}`;
+
+    // Add Donor marker
+    const donorIcon = window.L.divIcon({
+      className: 'custom-map-marker',
+      html: `<div style="background: #10B981; width: 32px; height: 32px; border-radius: 50%; border: 3px solid #FFFFFF; box-shadow: 0 0 12px rgba(16,185,129,0.7); display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-weight: bold; font-size: 11px;">DON</div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+
+    const donorMarker = window.L.marker(donorCoords, { icon: donorIcon }).addTo(matchingMapInstance);
+    donorMarker.bindPopup(`<strong>Supplier: ${donorFac.name}</strong><br/>Surplus: ${activeCand.availableSurplus} units<br/>Match: ${Math.round(activeCand.matchScore)}%`);
+    candidateMarkers.push(donorMarker);
+    bounds.push(donorCoords);
+
+    // Draw route line
+    matchingRouteLine = window.L.polyline([donorCoords, reqCoords], {
+      color: '#38BDF8',
+      weight: 3.5,
+      dashArray: '6, 8',
+      opacity: 0.9
+    }).addTo(matchingMapInstance);
+  }
+
+  // Fit bounds nicely
+  try {
+    matchingMapInstance.fitBounds(bounds, { padding: [50, 50] });
+    setTimeout(() => {
+      if (matchingMapInstance) matchingMapInstance.invalidateSize();
+    }, 200);
+  } catch (e) {}
 }
 
 function openCreateTransferModal(candidate) {
@@ -325,12 +458,12 @@ function openCreateTransferModal(candidate) {
           <span class="required-pill">Required</span>
         </label>
         <input type="number" id="transfer-modal-qty" class="form-input" min="1" max="${candidate.availableSurplus}" value="${suggestedQty}" required />
-        <span class="form-help">Recipient requested ${shortage.unmetQuantity} units. Max supplier surplus: ${candidate.availableSurplus} units.</span>
+        <span class="form-help">Recipient requested ${shortage.unmetQuantity} units. Max donor surplus: ${candidate.availableSurplus} units.</span>
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="transfer-modal-notes">Order Notes / Clinical Instructions</label>
-        <input type="text" id="transfer-modal-notes" class="form-input" placeholder="e.g. Expedited transfer for shortage ticket" value="Direct matched transfer fulfilling ${shortage.id}" />
+        <label class="form-label" for="transfer-modal-notes">Order Notes / Transit Instructions</label>
+        <input type="text" id="transfer-modal-notes" class="form-input" placeholder="e.g. Expedited courier dispatch" value="Direct matched transfer fulfilling ${shortage.id}" />
       </div>
     </form>
   `;
@@ -343,7 +476,7 @@ function openCreateTransferModal(candidate) {
     </button>
   `;
 
-  const { close } = modal.open({ title: 'Create Medicine Transfer', content, footer });
+  const { close } = modal.open({ title: 'Create Medicine Transfer Manifest', content, footer });
 
   document.getElementById('btn-trf-modal-cancel')?.addEventListener('click', close);
   
@@ -358,11 +491,13 @@ function openCreateTransferModal(candidate) {
     }
 
     const payload = {
+      shortageId: shortage.id,
       senderFacilityId: candidate.donorFacilityId,
       senderFacilityName: candidate.donorFacilityName,
       recipientFacilityId: shortage.facilityId,
       recipientFacilityName: shortage.facilityName,
       batchId: candidate.batchId,
+      batchNumber: candidate.batchNumber,
       medicineName: candidate.medicineName,
       strength: candidate.strength,
       quantity: qty,

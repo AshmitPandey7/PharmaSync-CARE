@@ -223,6 +223,24 @@ export async function render(container) {
     </div>
 
     <!-- Section: Open Medicine Requests & Shortages -->
+    <!-- Regional Redistribution & Logistics Network Banner -->
+    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 14px 18px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="background: #171717; border: 1px solid #303030; border-radius: 8px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+          🗺️
+        </div>
+        <div>
+          <strong style="color: #FFFFFF; font-size: 14.5px;">Bengaluru Regional Healthcare Network &amp; Transit Telemetry</strong>
+          <div style="color: var(--text-muted); font-size: 12px; margin-top: 2px;">
+            ${facilities.length} connected hospitals, clinics, and pharmacies &bull; Haversine geospatial proximity routing &bull; FEFO-aware surplus dispatch
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <a href="#/network" class="btn btn-secondary btn-sm">Explore Network Map &rarr;</a>
+        <a href="#/transfers" class="btn btn-outline btn-sm">Track Active Shipments (🚚)</a>
+      </div>
+    </div>
     <div class="card" style="margin-bottom: 24px;">
       <div class="card-header">
         <div>

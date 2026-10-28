@@ -126,3 +126,50 @@ def test_reject_invalid_lifecycle_jump(client):
     jump_res = client.post(f'/api/transfers/{trf_id}/receive', json={"note": "Illegal jump"})
     assert jump_res.status_code == 400
     assert "invalid" in jump_res.get_json()['message'].lower()
+
+
+def test_transfer_simulated_tracking_lifecycle(client):
+    # 1. Create and dispatch transfer
+    payload = {
+        "senderFacilityId": "FAC-001",
+        "recipientFacilityId": "FAC-003",
+        "batchId": "BAT-102",
+        "medicineName": "Amoxicillin + Clavulanate",
+        "strength": "625mg Tablets",
+        "quantity": 10
+    }
+    trf = client.post('/api/transfers', json=payload).get_json()['data']
+    trf_id = trf['id']
+
+    client.post(f'/api/transfers/{trf_id}/approve', json={"note": "Approved"})
+    client.post(f'/api/transfers/{trf_id}/dispatch', json={"note": "Dispatched"})
+
+    # 2. Get initial tracking state
+    trk_res = client.get(f'/api/transfers/{trf_id}/tracking')
+    assert trk_res.status_code == 200
+    trk_data = trk_res.get_json()['data']
+
+    assert len(trk_data['routeCheckpoints']) == 5
+    assert trk_data['currentCheckpointIndex'] == 0
+    assert trk_data['isSimulatedTracking'] is True
+    assert trk_data['senderFacility']['id'] == "FAC-001"
+    assert trk_data['recipientFacility']['id'] == "FAC-003"
+    assert len(trk_data['events']) >= 1
+
+    # 3. Advance to checkpoint 1 (IN_TRANSIT)
+    adv1 = client.post(f'/api/transfers/{trf_id}/tracking/advance').get_json()['data']
+    assert adv1['currentCheckpointIndex'] == 1
+    assert adv1['currentStage'] == 'IN_TRANSIT'
+    assert len(adv1['events']) >= 2
+
+    # 4. Advance through all checkpoints
+    client.post(f'/api/transfers/{trf_id}/tracking/advance') # Checkpoint 2 (TRANSIT_HUB)
+    client.post(f'/api/transfers/{trf_id}/tracking/advance') # Checkpoint 3 (OUT_FOR_DELIVERY)
+    adv_final = client.post(f'/api/transfers/{trf_id}/tracking/advance').get_json()['data'] # Checkpoint 4 (DELIVERED)
+    assert adv_final['currentCheckpointIndex'] == 4
+    assert adv_final['isDelivered'] is True
+
+    # 5. Reset tracking
+    rst = client.post(f'/api/transfers/{trf_id}/tracking/reset').get_json()['data']
+    assert rst['currentCheckpointIndex'] == 0
+    assert rst['isDelivered'] is False

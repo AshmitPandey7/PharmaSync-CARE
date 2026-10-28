@@ -10,7 +10,12 @@ LIFECYCLE_MAP = {
     'PROPOSED': 0,
     'REQUESTED': 1,
     'APPROVED': 2,
+    'PREPARED': 2,
     'DISPATCHED': 3,
+    'IN_TRANSIT': 3,
+    'TRANSIT_HUB': 3,
+    'OUT_FOR_DELIVERY': 3,
+    'DELIVERED': 3,
     'RECEIVED': 4,
     'CANCELLED': -1,
     'REJECTED': -1
@@ -63,6 +68,8 @@ class TransferRepository(BaseRepository):
             "lifecycleIndex": int(doc.get('lifecycleIndex', LIFECYCLE_MAP.get(status, 0))),
             "carrierName": doc.get('carrierName', 'Pending Assignment'),
             "temperatureLog": doc.get('temperatureLog', 'Ambient / Standard Cold'),
+            "currentCheckpointIndex": int(doc.get('currentCheckpointIndex', 0)),
+            "isSimulatedTracking": bool(doc.get('isSimulatedTracking', True)),
             "notes": doc.get('notes', ''),
             "requestedDate": fmt_dt(doc.get('requestedDate')),
             "approvedDate": fmt_dt(doc.get('approvedDate')),
@@ -191,4 +198,17 @@ class TransferRepository(BaseRepository):
             }
         )
 
+        return self.get_by_id(transfer_id)
+
+    def update_checkpoint(self, transfer_id, checkpoint_index):
+        now = datetime.now(timezone.utc)
+        self.collection.update_one(
+            self.id_query(transfer_id),
+            {
+                "$set": {
+                    "currentCheckpointIndex": checkpoint_index,
+                    "updatedAt": now
+                }
+            }
+        )
         return self.get_by_id(transfer_id)

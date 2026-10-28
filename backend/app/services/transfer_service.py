@@ -10,12 +10,19 @@ from app.repositories.transfer_repository import TransferRepository
 from app.repositories.inventory_repository import InventoryRepository
 from app.repositories.shortage_repository import ShortageRepository
 from app.repositories.audit_repository import AuditRepository
+from app.repositories.tracking_repository import TrackingRepository
+from app.repositories.facility_repository import FacilityRepository
 
 ALLOWED_TRANSITIONS = {
     'PROPOSED': ['REQUESTED', 'APPROVED', 'CANCELLED', 'REJECTED'],
     'REQUESTED': ['APPROVED', 'CANCELLED', 'REJECTED'],
-    'APPROVED': ['DISPATCHED', 'CANCELLED'],
-    'DISPATCHED': ['RECEIVED', 'CANCELLED'],
+    'APPROVED': ['PREPARED', 'DISPATCHED', 'CANCELLED'],
+    'PREPARED': ['DISPATCHED', 'CANCELLED'],
+    'DISPATCHED': ['IN_TRANSIT', 'TRANSIT_HUB', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RECEIVED', 'CANCELLED'],
+    'IN_TRANSIT': ['TRANSIT_HUB', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RECEIVED', 'CANCELLED'],
+    'TRANSIT_HUB': ['OUT_FOR_DELIVERY', 'DELIVERED', 'RECEIVED', 'CANCELLED'],
+    'OUT_FOR_DELIVERY': ['DELIVERED', 'RECEIVED', 'CANCELLED'],
+    'DELIVERED': ['RECEIVED', 'CANCELLED'],
     'RECEIVED': [],
     'CANCELLED': [],
     'REJECTED': []
@@ -28,6 +35,8 @@ class TransferService:
         self.inv_repo = InventoryRepository()
         self.shortage_repo = ShortageRepository()
         self.audit = AuditRepository()
+        self.tracking_repo = TrackingRepository()
+        self.fac_repo = FacilityRepository()
 
     def get_transfers(self, status=None, facility_id=None, search=None):
         return self.repo.get_all(status, facility_id, search)
@@ -191,3 +200,129 @@ class TransferService:
             details=f"Transfer {transfer['transferCode']} status changed to {next_status}. Note: {note}"
         )
         return updated
+
+
+    def get_tracking(self, transfer_id):
+        """
+        Retrieves real-time simulated tracking state, route geometry,
+        checkpoints, and persistent event logs for a transfer order.
+        """
+        transfer = self.repo.get_by_id(transfer_id)
+        if not transfer:
+            raise ValueError(f"Transfer {transfer_id} not found.")
+
+        sender = self.fac_repo.get_by_id(transfer['senderFacilityId'])
+        recipient = self.fac_repo.get_by_id(transfer['recipientFacilityId'])
+
+        sender_coords = sender['coordinates'] if sender else [12.9716, 77.5946]
+        recipient_coords = recipient['coordinates'] if recipient else [12.9150, 77.5820]
+
+        checkpoints = self.tracking_repo.generate_route_checkpoints(
+            transfer['senderFacilityId'],
+            transfer['recipientFacilityId'],
+            sender_coords,
+            recipient_coords
+        )
+
+        current_idx = transfer.get('currentCheckpointIndex', 0)
+        events = self.tracking_repo.get_events_for_transfer(transfer_id)
+
+        # If no events exist yet and transfer is at least DISPATCHED, seed initial event
+        if not events and transfer['status'] in ('DISPATCHED', 'IN_TRANSIT', 'TRANSIT_HUB', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RECEIVED'):
+            initial_event = self.tracking_repo.log_event(
+                transfer_id=transfer_id,
+                checkpoint_index=0,
+                checkpoint_data=checkpoints[0],
+                note="Shipment dispatched from donor facility dock"
+            )
+            events = [initial_event]
+
+        # Annotate checkpoints with passed/active status
+        annotated_checkpoints = []
+        for i, cp in enumerate(checkpoints):
+            cp_copy = dict(cp)
+            cp_copy['index'] = i
+            if i < current_idx:
+                cp_copy['status'] = 'PASSED'
+                cp_copy['passed'] = True
+            elif i == current_idx:
+                cp_copy['status'] = 'CURRENT'
+                cp_copy['passed'] = True
+            else:
+                cp_copy['status'] = 'PENDING'
+                cp_copy['passed'] = False
+            annotated_checkpoints.append(cp_copy)
+
+        active_cp = annotated_checkpoints[min(current_idx, len(annotated_checkpoints) - 1)]
+
+        return {
+            "transfer": transfer,
+            "senderFacility": sender,
+            "recipientFacility": recipient,
+            "routeCheckpoints": annotated_checkpoints,
+            "currentCheckpointIndex": current_idx,
+            "currentLocation": active_cp['coordinates'],
+            "currentCheckpointName": active_cp['name'],
+            "currentStage": active_cp['stage'],
+            "isDelivered": current_idx >= len(checkpoints) - 1 or transfer['status'] in ('DELIVERED', 'RECEIVED'),
+            "isReceived": transfer['status'] == 'RECEIVED',
+            "isSimulatedTracking": True,
+            "events": events
+        }
+
+    def advance_tracking(self, transfer_id, user_name="Logistics Officer"):
+        """
+        Advances the simulated shipment to the next geographical checkpoint along its route.
+        Updates transfer status and records an immutable tracking event.
+        """
+        tracking_info = self.get_tracking(transfer_id)
+        transfer = tracking_info['transfer']
+
+        if transfer['status'] in ('RECEIVED', 'CANCELLED', 'REJECTED'):
+            raise ValueError(f"Cannot advance tracking for transfer in '{transfer['status']}' state.")
+
+        current_idx = tracking_info['currentCheckpointIndex']
+        checkpoints = tracking_info['routeCheckpoints']
+
+        if current_idx >= len(checkpoints) - 1:
+            # Already at final checkpoint (DELIVERED)
+            return self.get_tracking(transfer_id)
+
+        next_idx = current_idx + 1
+        next_cp = checkpoints[next_idx]
+        target_stage = next_cp['stage']
+
+        # Update checkpoint index on transfer record
+        self.repo.update_checkpoint(transfer_id, next_idx)
+
+        # Advance status if checkpoint introduces next lifecycle phase
+        if target_stage != transfer['status']:
+            try:
+                self.advance_status(transfer_id, target_stage, note=f"Arrived at {next_cp['name']}", user_name=user_name)
+            except Exception:
+                # Direct status update if not strictly strictly linear in ALLOWED_TRANSITIONS
+                self.repo.update_status(transfer_id, target_stage, changed_by=user_name, note=f"Arrived at {next_cp['name']}")
+
+        # Log tracking event
+        self.tracking_repo.log_event(
+            transfer_id=transfer_id,
+            checkpoint_index=next_idx,
+            checkpoint_data=next_cp,
+            note=next_cp.get('description', f"Checkpoint reached: {next_cp['name']}")
+        )
+
+        return self.get_tracking(transfer_id)
+
+    def reset_tracking(self, transfer_id, user_name="Logistics Officer"):
+        """
+        Resets simulated tracking back to initial dispatch point for presentation repeatability.
+        """
+        self.repo.update_checkpoint(transfer_id, 0)
+        self.tracking_repo.clear_events_for_transfer(transfer_id)
+
+        # Reset status back to DISPATCHED if it was in-transit/delivered
+        transfer = self.repo.get_by_id(transfer_id)
+        if transfer and transfer['status'] in ('IN_TRANSIT', 'TRANSIT_HUB', 'OUT_FOR_DELIVERY', 'DELIVERED'):
+            self.repo.update_status(transfer_id, 'DISPATCHED', changed_by=user_name, note="Simulated tracking route reset")
+
+        return self.get_tracking(transfer_id)

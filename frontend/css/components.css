@@ -277,6 +277,10 @@
 .badge-status-requested { background: #202020; color: #F5F5F5; border-color: #404040; }
 .badge-status-approved { background: #262626; color: #FFFFFF; border-color: #4A4A4A; }
 .badge-status-dispatched { background: var(--status-warning-bg); color: var(--status-warning); border-color: var(--status-warning-border); }
+.badge-status-in_transit { background: rgba(56, 189, 248, 0.15); color: #38BDF8; border-color: rgba(56, 189, 248, 0.35); }
+.badge-status-transit_hub { background: rgba(168, 85, 247, 0.15); color: #C084FC; border-color: rgba(168, 85, 247, 0.35); }
+.badge-status-out_for_delivery { background: rgba(245, 158, 11, 0.15); color: #FBBF24; border-color: rgba(245, 158, 11, 0.35); }
+.badge-status-delivered { background: rgba(16, 185, 129, 0.15); color: #34D399; border-color: rgba(16, 185, 129, 0.35); }
 .badge-status-received { background: var(--status-success-bg); color: var(--status-success); border-color: var(--status-success-border); }
 .badge-status-rejected { background: var(--status-critical-bg); color: var(--status-critical); border-color: var(--status-critical-border); }
 .badge-status-cancelled { background: #1C1C1C; color: #737373; border-color: #2E2E2E; }

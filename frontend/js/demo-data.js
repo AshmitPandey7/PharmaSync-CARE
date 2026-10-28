@@ -335,6 +335,7 @@ export const DEMO_TRANSFERS = [
     quantity: 50,
     status: 'DISPATCHED',
     lifecycleIndex: 3, // 0: PROPOSED, 1: REQUESTED, 2: APPROVED, 3: DISPATCHED, 4: RECEIVED
+    currentCheckpointIndex: 1,
     requestedDate: '2026-10-26 10:15',
     approvedDate: '2026-10-26 12:00',
     dispatchedDate: '2026-10-27 08:30',
@@ -362,6 +363,7 @@ export const DEMO_TRANSFERS = [
     quantity: 80,
     status: 'REQUESTED',
     lifecycleIndex: 1,
+    currentCheckpointIndex: 0,
     requestedDate: '2026-10-27 09:40',
     approvedDate: null,
     dispatchedDate: null,
@@ -387,6 +389,7 @@ export const DEMO_TRANSFERS = [
     quantity: 100,
     status: 'RECEIVED',
     lifecycleIndex: 4,
+    currentCheckpointIndex: 4,
     requestedDate: '2026-10-23 11:00',
     approvedDate: '2026-10-23 13:20',
     dispatchedDate: '2026-10-24 09:00',

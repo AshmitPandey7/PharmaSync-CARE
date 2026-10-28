@@ -37,3 +37,4 @@ instance/
 *.sqlite3
 *.db
 *.log
+scratch/

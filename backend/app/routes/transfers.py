@@ -125,3 +125,38 @@ def delete_transfer(id):
         return success_response(data={"id": id, "cancelled": True, "message": f"Transfer '{id}' cancelled and reserved stock released."})
     except Exception as e:
         return error_response(code="CANCEL_ERROR", message=str(e), status_code=400)
+
+
+@transfers_bp.route('/transfers/<id>/tracking', methods=['GET'])
+def get_transfer_tracking(id):
+    try:
+        data = transfer_service.get_tracking(id)
+        return success_response(data=data)
+    except ValueError as e:
+        return error_response(code="TRACKING_NOT_FOUND", message=str(e), status_code=404)
+    except Exception as e:
+        return error_response(code="TRACKING_FETCH_ERROR", message=str(e), status_code=500)
+
+
+@transfers_bp.route('/transfers/<id>/tracking/advance', methods=['POST'])
+def advance_transfer_tracking(id):
+    user_id = request.headers.get('X-User-Id', 'Logistics Officer')
+    try:
+        data = transfer_service.advance_tracking(id, user_name=user_id)
+        return success_response(data=data)
+    except ValueError as e:
+        return error_response(code="TRACKING_ADVANCE_ERROR", message=str(e), status_code=400)
+    except Exception as e:
+        return error_response(code="TRACKING_SERVER_ERROR", message=str(e), status_code=500)
+
+
+@transfers_bp.route('/transfers/<id>/tracking/reset', methods=['POST'])
+def reset_transfer_tracking(id):
+    user_id = request.headers.get('X-User-Id', 'Logistics Officer')
+    try:
+        data = transfer_service.reset_tracking(id, user_name=user_id)
+        return success_response(data=data)
+    except ValueError as e:
+        return error_response(code="TRACKING_RESET_ERROR", message=str(e), status_code=400)
+    except Exception as e:
+        return error_response(code="TRACKING_SERVER_ERROR", message=str(e), status_code=500)

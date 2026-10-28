@@ -17,6 +17,58 @@ import {
 // Local state for Demo Mode with session/local persistence
 const LOCAL_STORAGE_STATE_KEY = 'pharmasync_demo_state_v4';
 
+
+const DEMO_ROUTE_CORRIDORS = {
+  'FAC-001_FAC-003': [
+    { name: 'Apex Central Hospital - Central Dispatch Bay', coordinates: [12.9716, 77.5946], stage: 'DISPATCHED', description: 'Consignment inspected and loaded into transit carrier' },
+    { name: 'Lalbagh West Gate Transit Corridor', coordinates: [12.9520, 77.5860], stage: 'IN_TRANSIT', description: 'En route via South Central arterial route' },
+    { name: 'Jayanagar 4th Block Logistics Hub Inspection', coordinates: [12.9298, 77.5838], stage: 'TRANSIT_HUB', description: 'Temperature and chain-of-custody seal verified' },
+    { name: 'Banashankari / Outer Ring Road Junction', coordinates: [12.9180, 77.5750], stage: 'OUT_FOR_DELIVERY', description: 'Approaching destination health centre delivery zone' },
+    { name: 'Green Valley Health Centre - Receiving Dock', coordinates: [12.9150, 77.5820], stage: 'DELIVERED', description: 'Carrier arrived at clinic receiving dock; ready for pharmacist inspection' }
+  ],
+  'FAC-006_FAC-003': [
+    { name: 'District Medical Logistics Hub - Gate 2 Freight Bay', coordinates: [13.0100, 77.5500], stage: 'DISPATCHED', description: 'Consignment dispatched from regional supply depot' },
+    { name: 'Yeshwanthpur Industrial Express Corridor', coordinates: [12.9880, 77.5550], stage: 'IN_TRANSIT', description: 'Transit vehicle en route south via Tumkur corridor' },
+    { name: 'Vijayanagar Central Inspection Post', coordinates: [12.9640, 77.5360], stage: 'TRANSIT_HUB', description: 'Cold-chain data logger verified at transit checkpoint' },
+    { name: 'Nayandahalli / Mysuru Road Junction', coordinates: [12.9420, 77.5250], stage: 'OUT_FOR_DELIVERY', description: 'Out for delivery towards Green Valley rural cluster' },
+    { name: 'Green Valley Health Centre - Pharmacy Bay', coordinates: [12.9150, 77.5820], stage: 'DELIVERED', description: 'Arrived at destination receiving dock' }
+  ],
+  'FAC-002_FAC-005': [
+    { name: 'City Care Pharmacy - Express Outward Counter', coordinates: [12.9822, 77.6080], stage: 'DISPATCHED', description: 'Batch packaged and handed to courier runner' },
+    { name: 'Cantonment Station Transit Link', coordinates: [12.9760, 77.5970], stage: 'IN_TRANSIT', description: 'Courier en route through central healthcare sector' },
+    { name: 'Cubbon Road Distribution Checkpoint', coordinates: [12.9710, 77.5860], stage: 'TRANSIT_HUB', description: 'Midpoint package inspection verified intact' },
+    { name: 'Russell Market Sector Access Road', coordinates: [12.9665, 77.5760], stage: 'OUT_FOR_DELIVERY', description: 'Final delivery leg approaching charitable dispensary' },
+    { name: 'St. Jude Charitable Dispensary - Inward Dock', coordinates: [12.9640, 77.5710], stage: 'DELIVERED', description: 'Courier handed consignment to dispensary in-charge' }
+  ],
+  'FAC-001_FAC-005': [
+    { name: 'Apex Central Hospital - Central Dispatch Bay', coordinates: [12.9716, 77.5946], stage: 'DISPATCHED', description: 'Consignment dispatched from hospital pharmacy' },
+    { name: 'KR Market Medical Corridor', coordinates: [12.9680, 77.5850], stage: 'IN_TRANSIT', description: 'Transit vehicle en route' },
+    { name: 'Chickpet Distribution Inspection Post', coordinates: [12.9660, 77.5780], stage: 'TRANSIT_HUB', description: 'Carrier custody log signed' },
+    { name: 'Old Town Approach Link', coordinates: [12.9648, 77.5730], stage: 'OUT_FOR_DELIVERY', description: 'Vehicle approaching St. Jude Dispensary' },
+    { name: 'St. Jude Charitable Dispensary - Pharmacy Gate', coordinates: [12.9640, 77.5710], stage: 'DELIVERED', description: 'Delivered to dispensary intake team' }
+  ]
+};
+
+function generateDemoRouteCheckpoints(sender, recipient) {
+  const key = `${sender.id}_${recipient.id}`;
+  if (DEMO_ROUTE_CORRIDORS[key]) {
+    return JSON.parse(JSON.stringify(DEMO_ROUTE_CORRIDORS[key]));
+  }
+
+  const sCoords = sender.coordinates || [12.9716, 77.5946];
+  const rCoords = recipient.coordinates || [12.9150, 77.5820];
+  const sLat = sCoords[0], sLng = sCoords[1];
+  const rLat = rCoords[0], rLng = rCoords[1];
+
+  return [
+    { name: `${sender.name} - Dispatch Bay`, coordinates: [sLat, sLng], stage: 'DISPATCHED', description: 'Shipment packaged and released' },
+    { name: 'Regional Highway Corridor Post', coordinates: [+(sLat + 0.25 * (rLat - sLat) + 0.003).toFixed(5), +(sLng + 0.25 * (rLng - sLng) - 0.002).toFixed(5)], stage: 'IN_TRANSIT', description: 'Courier moving along regional arterial road' },
+    { name: 'District Logistics Inspection Post', coordinates: [+(sLat + 0.50 * (rLat - sLat)).toFixed(5), +(sLng + 0.50 * (rLng - sLng)).toFixed(5)], stage: 'TRANSIT_HUB', description: 'Midpoint custody & seal check completed' },
+    { name: 'Destination Sector Outer Ring', coordinates: [+(sLat + 0.75 * (rLat - sLat) - 0.002).toFixed(5), +(sLng + 0.75 * (rLng - sLng) + 0.002).toFixed(5)], stage: 'OUT_FOR_DELIVERY', description: 'Out for delivery approaching destination' },
+    { name: `${recipient.name} - Receiving Dock`, coordinates: [rLat, rLng], stage: 'DELIVERED', description: 'Consignment arrived at recipient dock' }
+  ];
+}
+
 class DemoStateStore {
   constructor() {
     this.state = this.loadState();
@@ -887,6 +939,142 @@ export const api = {
   async deleteTransfer(id) {
     return this.cancelTransfer(id, 'Order deleted by operator');
   },
+
+  // Shipment Tracking API
+  async getTransferTracking(id) {
+    if (config.DEMO_MODE) {
+      const trf = demoStore.state.transfers.find(t => t.id === id);
+      if (!trf) return { success: false, error: 'Transfer not found' };
+
+      const sender = demoStore.state.facilities.find(f => f.id === trf.senderFacilityId) || demoStore.state.facilities[0];
+      const recipient = demoStore.state.facilities.find(f => f.id === trf.recipientFacilityId) || demoStore.state.facilities[1];
+
+      const checkpoints = generateDemoRouteCheckpoints(sender, recipient);
+      const currentIdx = trf.currentCheckpointIndex || 0;
+
+      demoStore.state.trackingEvents = demoStore.state.trackingEvents || [];
+      let events = demoStore.state.trackingEvents.filter(e => e.transferId === id);
+
+      if (events.length === 0 && ['DISPATCHED', 'IN_TRANSIT', 'TRANSIT_HUB', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RECEIVED'].includes(trf.status)) {
+        const initEvent = {
+          id: `TRK-${Math.floor(100 + Math.random() * 900)}`,
+          transferId: id,
+          checkpointIndex: 0,
+          checkpointName: checkpoints[0].name,
+          stage: checkpoints[0].stage,
+          coordinates: checkpoints[0].coordinates,
+          timestamp: trf.dispatchedDate || new Date().toISOString().replace('T', ' ').substring(0, 16),
+          temperature: trf.temperatureLog || '4.2°C Cold-Chain Verified',
+          notes: 'Shipment dispatched from donor facility dock'
+        };
+        demoStore.state.trackingEvents.push(initEvent);
+        events = [initEvent];
+        demoStore.save();
+      }
+
+      const annotatedCheckpoints = checkpoints.map((cp, idx) => ({
+        ...cp,
+        index: idx,
+        status: idx < currentIdx ? 'PASSED' : (idx === currentIdx ? 'CURRENT' : 'PENDING'),
+        passed: idx <= currentIdx
+      }));
+
+      const activeCp = annotatedCheckpoints[Math.min(currentIdx, annotatedCheckpoints.length - 1)];
+
+      return {
+        success: true,
+        data: {
+          transfer: trf,
+          senderFacility: sender,
+          recipientFacility: recipient,
+          routeCheckpoints: annotatedCheckpoints,
+          currentCheckpointIndex: currentIdx,
+          currentLocation: activeCp.coordinates,
+          currentCheckpointName: activeCp.name,
+          currentStage: activeCp.stage,
+          isDelivered: currentIdx >= checkpoints.length - 1 || ['DELIVERED', 'RECEIVED'].includes(trf.status),
+          isReceived: trf.status === 'RECEIVED',
+          isSimulatedTracking: true,
+          events
+        }
+      };
+    }
+
+    return fetchFromApi(`/transfers/${id}/tracking`);
+  },
+
+  async advanceTransferTracking(id) {
+    if (config.DEMO_MODE) {
+      const trf = demoStore.state.transfers.find(t => t.id === id);
+      if (!trf) return { success: false, error: 'Transfer not found' };
+
+      const sender = demoStore.state.facilities.find(f => f.id === trf.senderFacilityId) || demoStore.state.facilities[0];
+      const recipient = demoStore.state.facilities.find(f => f.id === trf.recipientFacilityId) || demoStore.state.facilities[1];
+      const checkpoints = generateDemoRouteCheckpoints(sender, recipient);
+
+      const currentIdx = trf.currentCheckpointIndex || 0;
+      if (currentIdx >= checkpoints.length - 1) {
+        return this.getTransferTracking(id);
+      }
+
+      const nextIdx = currentIdx + 1;
+      const nextCp = checkpoints[nextIdx];
+
+      trf.currentCheckpointIndex = nextIdx;
+      trf.status = nextCp.stage;
+
+      const event = {
+        id: `TRK-${Math.floor(100 + Math.random() * 900)}`,
+        transferId: id,
+        checkpointIndex: nextIdx,
+        checkpointName: nextCp.name,
+        stage: nextCp.stage,
+        coordinates: nextCp.coordinates,
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        temperature: trf.temperatureLog || '4.2°C Cold-Chain Verified',
+        notes: nextCp.description || `Checkpoint reached: ${nextCp.name}`
+      };
+
+      demoStore.state.trackingEvents = demoStore.state.trackingEvents || [];
+      demoStore.state.trackingEvents.push(event);
+
+      trf.statusHistory = trf.statusHistory || [];
+      trf.statusHistory.push({
+        status: nextCp.stage,
+        timestamp: event.timestamp,
+        by: config.CURRENT_USER.name,
+        note: `Simulated tracking reached ${nextCp.name}`
+      });
+
+      this.addAuditLog(`SHIPMENT_${nextCp.stage}`, trf.transferCode, `Reached checkpoint: ${nextCp.name}`);
+      demoStore.save();
+      return this.getTransferTracking(id);
+    }
+
+    return fetchFromApi(`/transfers/${id}/tracking/advance`, { method: 'POST' });
+  },
+
+  async resetTransferTracking(id) {
+    if (config.DEMO_MODE) {
+      const trf = demoStore.state.transfers.find(t => t.id === id);
+      if (!trf) return { success: false, error: 'Transfer not found' };
+
+      trf.currentCheckpointIndex = 0;
+      if (['IN_TRANSIT', 'TRANSIT_HUB', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(trf.status)) {
+        trf.status = 'DISPATCHED';
+      }
+
+      if (demoStore.state.trackingEvents) {
+        demoStore.state.trackingEvents = demoStore.state.trackingEvents.filter(e => e.transferId !== id);
+      }
+
+      demoStore.save();
+      return this.getTransferTracking(id);
+    }
+
+    return fetchFromApi(`/transfers/${id}/tracking/reset`, { method: 'POST' });
+  },
+
 
 
   // Audit Logs
